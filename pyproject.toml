@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "langgraph-observe"
+version = "0.1.0"
+description = "Lightweight observability, tracing, and embedded dashboard for LangGraph workflows in FastAPI"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Developer" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Framework :: FastAPI",
+]
+dependencies = [
+    "fastapi>=0.100.0",
+    "starlette>=0.27.0",
+    "pydantic>=2.0.0",
+    "langchain-core>=0.2.0",
+    "langgraph>=0.1.0",
+    "sqlalchemy>=1.4.0",
+    "pymysql>=1.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.20.0",
+    "httpx>=0.24.0",
+    "uvicorn>=0.20.0",
+]
+
+[project.scripts]
+langgraph-observe = "langgraph_observe.server.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["langgraph_observe*"]
+
+[tool.setuptools.package-data]
+"langgraph_observe.server.ui" = ["*.html"]

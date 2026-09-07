@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LangGraph Observability - Complete Setup & Distribution Guide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #0f172a;
+      color: #e2e8f0;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    pre code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .card-glow {
+      box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.15);
+    }
+  </style>
+</head>
+<body class="min-h-screen py-10 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-4xl mx-auto">
+
+    <!-- Header -->
+    <header class="mb-12 text-center">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 mb-4">
+        <span>🔭</span> Universal Observability & Tracing
+      </div>
+      <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">
+        LangGraph Observe <span class="gradient-text">Setup Guide</span>
+      </h1>
+      <p class="text-slate-400 text-lg max-w-2xl mx-auto">
+        Complete walkthrough for installing the Python SDK in client applications and distributing the one-click Windows server executable.
+      </p>
+    </header>
+
+    <!-- Navigation Cards -->
+    <div class="grid sm:grid-cols-2 gap-4 mb-10">
+      <a href="#part1" class="block p-5 rounded-xl bg-slate-800/80 border border-slate-700/60 hover:border-indigo-500/50 hover:bg-slate-800 transition-all card-glow">
+        <div class="text-2xl mb-2">📦</div>
+        <h2 class="text-lg font-bold text-white mb-1">Part 1: Client SDK (pip)</h2>
+        <p class="text-sm text-slate-400">Install the package and instrument your FastAPI & LangGraph backends.</p>
+      </a>
+      <a href="#part2" class="block p-5 rounded-xl bg-slate-800/80 border border-slate-700/60 hover:border-purple-500/50 hover:bg-slate-800 transition-all card-glow">
+        <div class="text-2xl mb-2">🖱️</div>
+        <h2 class="text-lg font-bold text-white mb-1">Part 2: One-Click Executable (.exe)</h2>
+        <p class="text-sm text-slate-400">Run or distribute the standalone dashboard server without Python.</p>
+      </a>
+    </div>
+
+    <!-- Architecture Overview -->
+    <section class="mb-12 p-6 rounded-2xl bg-slate-900 border border-slate-800">
+      <h3 class="text-sm uppercase tracking-wider text-indigo-400 font-semibold mb-3">Architecture: Decoupled by Design</h3>
+      <div class="bg-slate-950 p-4 rounded-xl font-mono text-xs text-slate-300 overflow-x-auto leading-relaxed border border-slate-800/80">
+┌───────────────────────────────────────┐            ┌──────────────────────────────────────────┐
+│   FastAPI Backend (Port 8000, etc.)   │            │   Standalone Server (.exe / Port 8765)   │
+│                                       │            │                                          │
+│  ├── instrument_fastapi(...)          │   HTTP     │  ├── Ingestion API: /api/v1/traces       │
+│  ├── observe_graph(workflow)          │ ─────────► │  ├── Storage: SQLite or Cloud SQL MySQL  │
+│  └── Async Background Exporter        │  (Async)   │  └── Live Dashboard: http://localhost:8765│
+└───────────────────────────────────────┘            └──────────────────────────────────────────┘
+      </div>
+      <p class="text-sm text-slate-400 mt-3">
+        Your client programs run independently. If the observability server is offline, your backend continues executing with zero latency and zero disruption.
+      </p>
+    </section>
+
+    <!-- PART 1: PIP PACKAGE -->
+    <section id="part1" class="mb-16">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600 text-white font-bold text-sm">1</span>
+        <h2 class="text-2xl font-bold text-white">Installing the Client SDK in Other Programs</h2>
+      </div>
+
+      <!-- Step 1.1: Installation options -->
+      <div class="space-y-6">
+        <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/60">
+          <h3 class="text-lg font-semibold text-white mb-3">Step 1: Install the Wheel or Package</h3>
+          <p class="text-slate-300 text-sm mb-4">
+            The wheel package (<code class="text-indigo-300 bg-slate-900 px-1.5 py-0.5 rounded text-xs">.whl</code>) is pre-compiled and can be installed in any Python environment (Python 3.9+).
+          </p>
+
+          <div class="space-y-4">
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-semibold text-slate-400">Option A: Install using local wheel file (Recommended)</span>
+                <button onclick="copyCode('code-whl', this)" class="text-xs text-indigo-400 hover:text-indigo-300">Copy</button>
+              </div>
+              <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 font-mono text-xs text-slate-200 overflow-x-auto">
+                <code id="code-whl">pip install dist/langgraph_observe-0.1.0-py3-none-any.whl</code>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-semibold text-slate-400">Option B: Install from source folder</span>
+                <button onclick="copyCode('code-src', this)" class="text-xs text-indigo-400 hover:text-indigo-300">Copy</button>
+              </div>
+              <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 font-mono text-xs text-slate-200 overflow-x-auto">
+                <code id="code-src">pip install d:\observe</code>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-semibold text-slate-400">Option C: Add to requirements.txt</span>
+                <button onclick="copyCode('code-req', this)" class="text-xs text-indigo-400 hover:text-indigo-300">Copy</button>
+              </div>
+              <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 font-mono text-xs text-slate-200 overflow-x-auto">
+                <code id="code-req"># In requirements.txt
+./libs/langgraph_observe-0.1.0-py3-none-any.whl</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 1.2: Code Example -->
+        <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/60">
+          <div class="flex justify-between items-center mb-3">
+            <h3 class="text-lg font-semibold text-white">Step 2: Instrument Your FastAPI Application</h3>
+            <button onclick="copyCode('code-client', this)" class="text-xs px-2.5 py-1 rounded bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600/50 transition">Copy Code</button>
+          </div>
+          <p class="text-slate-300 text-sm mb-4">
+            Only two lines are needed: call <code class="text-indigo-300 bg-slate-900 px-1.5 py-0.5 rounded text-xs">instrument_fastapi(app)</code> and wrap your compiled LangGraph workflow with <code class="text-indigo-300 bg-slate-900 px-1.5 py-0.5 rounded text-xs">observe_graph()</code>.
+          </p>
+
+          <pre class="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs text-slate-200 overflow-x-auto leading-relaxed"><code id="code-client">from fastapi import FastAPI
+from typing import TypedDict
+from langgraph.graph import StateGraph, START, END
+
+# 1. Import observability hooks
+from langgraph_observe import instrument_fastapi, observe_graph
+
+app = FastAPI(title="Payment & Order Service")
+
+# 2. Point client to the running observability server
+# (Use localhost:8765 if local, or http://&lt;SERVER_IP&gt;:8765 if on network)
+instrument_fastapi(app, server_url="http://localhost:8765")
+
+# 3. Define your LangGraph workflow
+class OrderState(TypedDict):
+    query: str
+    response: str
+
+builder = StateGraph(OrderState)
+
+def process_order(state: OrderState) -> dict:
+    return {"response": f"Processed order query: {state['query']}"}
+
+builder.add_node("process", process_order)
+builder.add_edge(START, "process")
+builder.add_edge("process", END)
+
+# 4. Wrap compiled graph with observe_graph
+workflow = observe_graph(builder.compile(), name="OrderWorkflow")
+
+# 5. Execute in your route
+@app.post("/checkout")
+async def checkout_endpoint(payload: dict):
+    result = await workflow.ainvoke({"query": payload.get("query", ""), "response": ""})
+    return result</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- PART 2: STANDALONE EXE -->
+    <section id="part2" class="mb-16">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-600 text-white font-bold text-sm">2</span>
+        <h2 class="text-2xl font-bold text-white">Running & Distributing the Standalone Executable (.exe)</h2>
+      </div>
+
+      <div class="space-y-6">
+        <!-- Distribution overview -->
+        <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/60">
+          <h3 class="text-lg font-semibold text-white mb-2">1. No Python Required</h3>
+          <p class="text-slate-300 text-sm mb-4">
+            Anyone with a Windows machine can run the Observability Server & Dashboard without installing Python, pip, or virtual environments.
+          </p>
+
+          <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 text-sm space-y-2">
+            <div class="font-semibold text-white">Files to distribute to teammates:</div>
+            <div class="font-mono text-xs text-indigo-300 bg-slate-950 p-3 rounded-lg border border-slate-800/80">
+📁 MyObservabilityServer/<br />
+├── langgraph-observe.exe   (The standalone server app, ~49 MB)<br />
+└── .env                    (Configuration file)
+            </div>
+            <p class="text-xs text-slate-400">
+              Both files are located in your <code class="text-slate-300 bg-slate-950 px-1 py-0.5 rounded">dist/</code> directory. You can zip and send this folder directly.
+            </p>
+          </div>
+        </div>
+
+        <!-- How to configure -->
+        <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/60">
+          <h3 class="text-lg font-semibold text-white mb-2">2. Database Configuration (<code class="text-indigo-400">.env</code>)</h3>
+          <p class="text-slate-300 text-sm mb-4">
+            Before launching, open <code class="text-indigo-300 bg-slate-900 px-1.5 py-0.5 rounded text-xs">.env</code> in Notepad to choose the database storage:
+          </p>
+
+          <div class="space-y-3">
+            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+              <div class="text-xs font-semibold text-emerald-400 mb-1">Option A: Shared Cloud SQL (MySQL) - Ideal for teams</div>
+              <div class="font-mono text-xs text-slate-300">
+                DATABASE_URL="mysql+pymysql://user:password@cloud-sql-host:3306/observe"
+              </div>
+            </div>
+            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+              <div class="text-xs font-semibold text-sky-400 mb-1">Option B: Local SQLite - Ideal for solo/offline use</div>
+              <div class="font-mono text-xs text-slate-400">
+                # Simply comment out or clear DATABASE_URL to automatically use local observe.db
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step-by-step launch -->
+        <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/60">
+          <h3 class="text-lg font-semibold text-white mb-4">3. One-Click Launch Walkthrough</h3>
+
+          <div class="space-y-4 text-sm">
+            <div class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-xs shrink-0">1</div>
+              <div>
+                <strong class="text-white">Double-click <code class="text-indigo-300 bg-slate-900 px-1.5 py-0.5 rounded text-xs">langgraph-observe.exe</code></strong>
+                <p class="text-slate-400 text-xs mt-0.5">A console window opens and displays the current database configuration.</p>
+              </div>
+            </div>
+
+            <div class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-xs shrink-0">2</div>
+              <div>
+                <strong class="text-white">Database URL Prompt</strong>
+                <p class="text-slate-400 text-xs mt-0.5">
+                  Press <kbd class="bg-slate-900 text-slate-200 px-1.5 py-0.5 rounded border border-slate-700 text-xs font-mono">Enter</kbd> to keep the configured database, or paste a new database URL and press <kbd class="bg-slate-900 text-slate-200 px-1.5 py-0.5 rounded border border-slate-700 text-xs font-mono">Enter</kbd>.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-xs shrink-0">3</div>
+              <div>
+                <strong class="text-white">Live URLs & Browser Auto-Launch</strong>
+                <p class="text-slate-400 text-xs mt-0.5">
+                  The server starts and automatically launches your web browser to:
+                </p>
+                <div class="mt-2 bg-slate-950 p-3 rounded-lg border border-slate-800 font-mono text-xs text-indigo-300">
+                  👉 Dashboard: http://127.0.0.1:8765/<br />
+                  👉 Ingestion API: http://127.0.0.1:8765/api/v1/traces
+                </div>
+              </div>
+            </div>
+
+            <div class="flex gap-3">
+              <div class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-xs shrink-0">4</div>
+              <div>
+                <strong class="text-white">Exit Protection</strong>
+                <p class="text-slate-400 text-xs mt-0.5">
+                  If stopped (e.g. via <kbd class="bg-slate-900 text-slate-200 px-1.5 py-0.5 rounded border border-slate-700 text-xs font-mono">Ctrl+C</kbd>) or if an error occurs, it prompts <code class="text-slate-300 bg-slate-950 px-1 py-0.5 rounded text-xs">Press Enter to exit...</code> so the console does not flash and vanish.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CLI options -->
+        <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/60">
+          <h3 class="text-lg font-semibold text-white mb-3">4. Optional Command Line Usage</h3>
+          <p class="text-slate-300 text-sm mb-3">
+            For automated environments or scripts, the executable accepts command-line arguments:
+          </p>
+
+          <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs text-slate-200 overflow-x-auto space-y-1">
+            <div><span class="text-slate-500"># Custom port</span><br />.\langgraph-observe.exe server --port 9000</div>
+            <div class="pt-2"><span class="text-slate-500"># Run without automatically opening the browser</span><br />.\langgraph-observe.exe server --no-browser</div>
+            <div class="pt-2"><span class="text-slate-500"># Explicit database URL</span><br />.\langgraph-observe.exe server --db-url "mysql+pymysql://user:pass@host:3306/db"</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick Troubleshooting & FAQ -->
+    <section class="mb-16 p-6 rounded-2xl bg-slate-900 border border-slate-800">
+      <h3 class="text-xl font-bold text-white mb-4">Frequently Asked Questions</h3>
+
+      <div class="space-y-4 text-sm">
+        <div>
+          <h4 class="font-semibold text-indigo-400">Can client apps on different machines connect to this server?</h4>
+          <p class="text-slate-300 mt-1">
+            Yes! In your client app, replace <code class="text-indigo-300 bg-slate-950 px-1.5 py-0.5 rounded text-xs">http://localhost:8765</code> with the IP or hostname of the machine running the `.exe` (e.g. <code class="text-indigo-300 bg-slate-950 px-1.5 py-0.5 rounded text-xs">http://192.168.1.50:8765</code>). If needed, run the `.exe` with <code class="text-indigo-300 bg-slate-950 px-1.5 py-0.5 rounded text-xs">--host 0.0.0.0</code> to allow external network connections.
+          </p>
+        </div>
+
+        <div>
+          <h4 class="font-semibold text-indigo-400">How do I recompile the executable after making code changes?</h4>
+          <p class="text-slate-300 mt-1">
+            Simply run <code class="text-indigo-300 bg-slate-950 px-1.5 py-0.5 rounded text-xs">py build_exe.py</code> in the repository root. It compiles everything into <code class="text-indigo-300 bg-slate-950 px-1.5 py-0.5 rounded text-xs">dist/langgraph-observe.exe</code> automatically.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="text-center text-slate-500 text-xs py-4 border-t border-slate-800">
+      LangGraph Observability Server & Client SDK &bull; MIT License
+    </footer>
+
+  </div>
+
+  <script>
+    function copyCode(id, button) {
+      const el = document.getElementById(id);
+      const text = el.innerText || el.textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const original = button.innerText;
+        button.innerText = 'Copied!';
+        button.classList.add('text-emerald-400');
+        setTimeout(() => {
+          button.innerText = original;
+          button.classList.remove('text-emerald-400');
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>

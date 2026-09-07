@@ -1,0 +1,3144 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LangGraph Observability Dashboard</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Tailwind & Mermaid -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#faf5ff',
+              100: '#f3e8ff',
+              200: '#e9d5ff',
+              300: '#d8b4fe',
+              400: '#c084fc',
+              500: '#a855f7',
+              600: '#9333ea',
+              700: '#7e22ce',
+              800: '#6b21a8',
+              900: '#581c87',
+              950: '#3b0764',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d8b4fe; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #a855f7; }
+    .dark ::-webkit-scrollbar-thumb { background: #4c1d95; }
+    .dark ::-webkit-scrollbar-thumb:hover { background: #6b21a8; }
+
+    .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+    /* Frosted glass styling */
+    .glass-card {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(233, 213, 255, 0.75);
+    }
+    .dark .glass-card {
+      background: rgba(24, 15, 38, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(88, 28, 135, 0.4);
+    }
+
+    /* Ambient background glow */
+    .ambient-bg {
+      background: radial-gradient(circle at 15% 10%, rgba(216, 180, 254, 0.25) 0%, transparent 40%),
+                  radial-gradient(circle at 85% 20%, rgba(192, 132, 252, 0.2) 0%, transparent 45%),
+                  #fcfaff;
+    }
+    .dark .ambient-bg {
+      background: radial-gradient(circle at 15% 10%, rgba(88, 28, 135, 0.35) 0%, transparent 40%),
+                  radial-gradient(circle at 85% 20%, rgba(126, 34, 206, 0.25) 0%, transparent 45%),
+                  #0f0919;
+    }
+
+    /* Subtle pulse animation for live dots */
+    @keyframes subtle-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.15); }
+    }
+    .animate-live {
+      animation: subtle-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    /* Toast alert popup */
+    #toastContainer {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      transform: translateY(20px);
+      opacity: 0;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body class="ambient-bg text-slate-800 dark:text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-purple-200 selection:text-purple-900 transition-colors duration-200">
+
+  <!-- Toast Container -->
+  <div id="toastContainer"></div>
+
+  <!-- Top Navigation Header -->
+  <header class="border-b border-purple-100 dark:border-purple-900/40 bg-white/80 dark:bg-[#150d24]/80 backdrop-blur-md sticky top-0 z-30 px-6 py-3 flex items-center justify-between shadow-sm shadow-purple-500/5">
+    
+    <!-- Brand Info -->
+    <div class="flex items-center space-x-3">
+      <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-purple-600 via-violet-600 to-indigo-500 flex items-center justify-center font-bold text-white shadow-md shadow-purple-500/30">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-base font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+          LangGraph <span class="text-purple-700 dark:text-purple-300 font-mono text-[11px] px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 border border-purple-200 dark:border-purple-800 font-semibold tracking-wide uppercase">Observe</span>
+        </h1>
+      </div>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="flex items-center space-x-2.5 text-xs">
+      
+      <!-- Live Pulse -->
+      <div class="flex items-center space-x-2 bg-purple-50 dark:bg-purple-950/50 px-3 py-1.5 rounded-full border border-purple-200/70 dark:border-purple-800/60 shadow-xs">
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-live"></span>
+        <span class="text-purple-900 dark:text-purple-200 font-medium">Live Tracing</span>
+      </div>
+
+      <!-- Auto-refresh dropdown & toggle -->
+      <div class="flex items-center bg-white dark:bg-purple-950/40 rounded-lg border border-purple-200 dark:border-purple-800/80 p-0.5 shadow-xs">
+        <button id="autoRefreshBtn" onclick="toggleAutoRefresh()" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-slate-700 dark:text-slate-200 hover:bg-purple-50 dark:hover:bg-purple-900/50 transition font-medium">
+          <svg id="refreshIcon" class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span id="refreshLabel">Auto: 3s</span>
+        </button>
+        <select id="refreshIntervalSelect" onchange="changeRefreshInterval(this.value)" class="bg-transparent text-[11px] text-purple-700 dark:text-purple-300 pr-1 py-1 outline-none font-medium cursor-pointer">
+          <option value="3000">3s</option>
+          <option value="5000">5s</option>
+          <option value="10000">10s</option>
+          <option value="30000">30s</option>
+        </select>
+      </div>
+
+      <!-- Trends Toggle Button -->
+      <button id="trendsToggleBtn" onclick="toggleTrendsSection()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-white dark:bg-purple-950/40 hover:bg-purple-50 dark:hover:bg-purple-900/50 text-slate-700 dark:text-slate-200 font-medium transition shadow-xs">
+        <span id="trendsToggleLabel">📈 Trends</span>
+      </button>
+
+      <!-- Node Performance Analytics Button -->
+      <button onclick="openNodeAnalyticsModal()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-white dark:bg-purple-950/40 hover:bg-purple-50 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 font-medium transition shadow-xs">
+        <span>🧩 Nodes</span>
+      </button>
+
+      <!-- API Key Auth Button -->
+      <button id="apiKeyBtn" onclick="openApiKeyModal()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-white dark:bg-purple-950/40 hover:bg-purple-50 dark:hover:bg-purple-900/50 text-slate-700 dark:text-slate-200 font-medium transition shadow-xs">
+        <span id="apiKeyStatus">🔑 Auth</span>
+      </button>
+
+      <!-- Theme Switcher (Light / Dark) -->
+      <button onclick="toggleTheme()" id="themeToggleBtn" title="Toggle Light/Dark Theme" class="p-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-white dark:bg-purple-950/40 hover:bg-purple-50 dark:hover:bg-purple-900/50 text-purple-600 dark:text-purple-300 transition shadow-xs">
+        <!-- Sun icon (shown in dark mode) -->
+        <svg id="sunIcon" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        <!-- Moon icon (shown in light mode) -->
+        <svg id="moonIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+      </button>
+
+      <!-- Clear All -->
+      <button onclick="clearHistory()" class="px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 font-medium transition shadow-xs">
+        Clear
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-5 sm:p-6 space-y-5">
+
+    <!-- KPI Metric Cards Grid -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-3.5">
+      
+      <!-- Total Traces -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] text-slate-500 dark:text-purple-300 font-semibold uppercase tracking-wider">Total Traces</span>
+          <span class="p-1 rounded-lg bg-purple-100 dark:bg-purple-900/60 text-purple-600 dark:text-purple-300">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+          </span>
+        </div>
+        <span id="metricTotalTraces" class="text-2xl font-bold text-slate-900 dark:text-white mt-2">-</span>
+      </div>
+
+      <!-- Success Rate -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] text-slate-500 dark:text-purple-300 font-semibold uppercase tracking-wider">Success Rate</span>
+          <span class="p-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </span>
+        </div>
+        <span id="metricSuccessRate" class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">-</span>
+      </div>
+
+      <!-- Avg Latency -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] text-slate-500 dark:text-purple-300 font-semibold uppercase tracking-wider">Avg Latency</span>
+          <span class="p-1 rounded-lg bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </span>
+        </div>
+        <span id="metricAvgDuration" class="text-2xl font-bold text-indigo-700 dark:text-indigo-300 mt-2">-</span>
+      </div>
+
+      <!-- P95 Latency -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] text-slate-500 dark:text-purple-300 font-semibold uppercase tracking-wider">P95 Latency</span>
+          <span class="p-1 rounded-lg bg-violet-100 dark:bg-violet-950/80 text-violet-600 dark:text-violet-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+          </span>
+        </div>
+        <span id="metricP95Duration" class="text-2xl font-bold text-violet-700 dark:text-violet-300 mt-2">-</span>
+      </div>
+
+      <!-- Total Tokens -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] text-slate-500 dark:text-purple-300 font-semibold uppercase tracking-wider">Total Tokens</span>
+          <span class="p-1 rounded-lg bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/></svg>
+          </span>
+        </div>
+        <span id="metricTotalTokens" class="text-2xl font-bold text-amber-700 dark:text-amber-400 mt-2">-</span>
+      </div>
+
+      <!-- Est. LLM Cost -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200 border-purple-200 dark:border-purple-700 bg-gradient-to-br from-white via-purple-50/40 to-white dark:from-[#1b122e] dark:to-[#150d24]">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] text-purple-700 dark:text-purple-300 font-bold uppercase tracking-wider">Est. LLM Cost</span>
+          <span class="p-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </span>
+        </div>
+        <span id="metricTotalCost" class="text-2xl font-bold text-emerald-700 dark:text-emerald-400 mt-2">$0.00</span>
+      </div>
+
+      <!-- LLM Invocations -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] text-slate-500 dark:text-purple-300 font-semibold uppercase tracking-wider">LLM Calls</span>
+          <span class="p-1 rounded-lg bg-purple-100 dark:bg-purple-900/60 text-purple-600 dark:text-purple-300">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          </span>
+        </div>
+        <span id="metricTotalLLM" class="text-2xl font-bold text-purple-800 dark:text-purple-300 mt-2">-</span>
+      </div>
+    </div>
+
+    <!-- Time-Series Performance Trends Panel -->
+    <div id="timeseriesPanel" class="hidden glass-card rounded-2xl p-5 shadow-xs space-y-4 border border-purple-200/80 dark:border-purple-800/80 transition-all duration-300">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-100 dark:border-purple-900/50 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+            📈
+          </div>
+          <div>
+            <h3 class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              Time-Series Trends & Quality Degradation Monitor
+              <span class="text-[10px] font-normal px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300">Class 1 & 4 Watch</span>
+            </h3>
+            <p class="text-[11px] text-slate-500 dark:text-purple-400">Track request volume, error spikes, P95 latency shifts, LLM costs, and model distribution drifts over time</p>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <!-- Window selector -->
+          <div class="flex items-center space-x-1 bg-purple-100/70 dark:bg-purple-950/70 p-1 rounded-xl border border-purple-200/80 dark:border-purple-800/80 text-[11px]">
+            <button onclick="changeTrendsWindow('1h')" id="trendsWin1h" class="px-2.5 py-1 rounded-lg font-medium transition text-slate-600 dark:text-purple-300 hover:text-purple-900">1h</button>
+            <button onclick="changeTrendsWindow('6h')" id="trendsWin6h" class="px-2.5 py-1 rounded-lg font-medium transition text-slate-600 dark:text-purple-300 hover:text-purple-900">6h</button>
+            <button onclick="changeTrendsWindow('24h')" id="trendsWin24h" class="px-2.5 py-1 rounded-lg font-bold transition bg-white dark:bg-purple-800 text-purple-900 dark:text-white shadow-xs">24h</button>
+            <button onclick="changeTrendsWindow('7d')" id="trendsWin7d" class="px-2.5 py-1 rounded-lg font-medium transition text-slate-600 dark:text-purple-300 hover:text-purple-900">7d</button>
+            <button onclick="changeTrendsWindow('30d')" id="trendsWin30d" class="px-2.5 py-1 rounded-lg font-medium transition text-slate-600 dark:text-purple-300 hover:text-purple-900">30d</button>
+          </div>
+          <button onclick="fetchTimeseriesAnalytics()" title="Refresh Trends" class="p-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-white dark:bg-purple-950/40 text-purple-600 dark:text-purple-300 hover:bg-purple-50 transition text-xs">
+            🔄
+          </button>
+        </div>
+      </div>
+
+      <!-- Grid of 3 Charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Chart 1: Request Volume & Error Rate -->
+        <div class="bg-purple-50/40 dark:bg-purple-950/30 rounded-xl p-3.5 border border-purple-100 dark:border-purple-900/60 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-purple-600"></span> Request Volume & Errors
+            </span>
+            <span id="trendsTotalRequestsBadge" class="text-[11px] font-mono text-purple-700 dark:text-purple-300 font-semibold">0 reqs</span>
+          </div>
+          <div id="chartVolumeContainer" class="h-36 w-full flex items-center justify-center overflow-hidden">
+            <!-- Rendered SVG bar chart -->
+          </div>
+          <div class="flex items-center justify-between text-[10px] text-slate-400 dark:text-purple-400 pt-1 border-t border-purple-100 dark:border-purple-900/40">
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-purple-500"></span> Success</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-rose-500"></span> Error</span>
+            <span id="trendsErrorRateBadge" class="font-bold text-rose-600 dark:text-rose-400">0% err</span>
+          </div>
+        </div>
+
+        <!-- Chart 2: Latency Trends (P95 vs Avg) -->
+        <div class="bg-purple-50/40 dark:bg-purple-950/30 rounded-xl p-3.5 border border-purple-100 dark:border-purple-900/60 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-violet-600"></span> Latency Curve (P95 & Avg)
+            </span>
+            <span id="trendsLatencyBadge" class="text-[11px] font-mono text-violet-700 dark:text-violet-300 font-semibold">P95: 0ms</span>
+          </div>
+          <div id="chartLatencyContainer" class="h-36 w-full flex items-center justify-center overflow-hidden">
+            <!-- Rendered SVG line chart -->
+          </div>
+          <div class="flex items-center justify-between text-[10px] text-slate-400 dark:text-purple-400 pt-1 border-t border-purple-100 dark:border-purple-900/40">
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-violet-600"></span> P95</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-indigo-400"></span> Avg</span>
+            <span class="text-slate-400 font-mono">ms</span>
+          </div>
+        </div>
+
+        <!-- Chart 3: LLM Cost & Model Distribution -->
+        <div class="bg-purple-50/40 dark:bg-purple-950/30 rounded-xl p-3.5 border border-purple-100 dark:border-purple-900/60 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-600"></span> LLM Cost & Models
+            </span>
+            <span id="trendsCostBadge" class="text-[11px] font-mono text-emerald-700 dark:text-emerald-400 font-bold">$0.00</span>
+          </div>
+          <div id="chartCostContainer" class="h-36 w-full flex items-center justify-center overflow-hidden">
+            <!-- Rendered SVG cost bars -->
+          </div>
+          <div id="trendsModelLegend" class="flex items-center justify-start gap-1.5 text-[10px] text-slate-500 dark:text-purple-300 pt-1 border-t border-purple-100 dark:border-purple-900/40 flex-wrap overflow-x-auto">
+            <!-- Rendered model badges -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search & Filter Controls Bar -->
+    <div class="glass-card rounded-2xl p-3.5 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
+      
+      <!-- Left: Search input & Status Filter Chips -->
+      <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto flex-1">
+        
+        <!-- Search Input with Keyboard shortcut -->
+        <div class="relative w-full sm:w-72">
+          <input
+            id="searchInput"
+            type="text"
+            placeholder="Search endpoint, trace ID, workflow..."
+            oninput="handleSearch()"
+            class="w-full bg-purple-50/50 dark:bg-purple-950/50 text-xs text-slate-800 dark:text-slate-100 pl-8 pr-8 py-2 rounded-xl border border-purple-200 dark:border-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-400/30 focus:border-purple-500 placeholder-slate-400 dark:placeholder-purple-400 transition"
+          />
+          <svg class="w-4 h-4 text-purple-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-white">
+            ✕
+          </button>
+        </div>
+
+        <!-- Quick Status Filter Chips -->
+        <div class="flex items-center space-x-1 bg-purple-100/60 dark:bg-purple-950/70 p-1 rounded-xl border border-purple-200/80 dark:border-purple-800/80 text-xs">
+          <button onclick="setStatusChip('')" id="statusChipAll" class="px-2.5 py-1 rounded-lg font-medium transition bg-white dark:bg-purple-800 text-purple-900 dark:text-white shadow-xs">
+            All
+          </button>
+          <button onclick="setStatusChip('completed')" id="statusChipCompleted" class="px-2.5 py-1 rounded-lg font-medium transition text-slate-600 dark:text-purple-300 hover:text-purple-900">
+            ✓ OK
+          </button>
+          <button onclick="setStatusChip('failed')" id="statusChipFailed" class="px-2.5 py-1 rounded-lg font-medium transition text-slate-600 dark:text-purple-300 hover:text-rose-600">
+            ✕ Failed
+          </button>
+          <button onclick="setStatusChip('running')" id="statusChipRunning" class="px-2.5 py-1 rounded-lg font-medium transition text-slate-600 dark:text-purple-300 hover:text-amber-600">
+            ⚡ Running
+          </button>
+        </div>
+
+        <!-- Hidden input storing selected status for fetchTraces -->
+        <input type="hidden" id="statusFilter" value="" />
+
+        <!-- Quick Eval Status Filter Chips -->
+        <div class="flex items-center space-x-1 bg-purple-100/60 dark:bg-purple-950/70 p-1 rounded-xl border border-purple-200/80 dark:border-purple-800/80 text-xs">
+          <button onclick="setEvalChip('')" id="evalChipAll" class="px-2 py-1 rounded-lg font-medium transition bg-white dark:bg-purple-800 text-purple-900 dark:text-white shadow-xs">
+            🎯 Evals: All
+          </button>
+          <button onclick="setEvalChip('passed')" id="evalChipPassed" class="px-2 py-1 rounded-lg font-medium transition text-slate-600 dark:text-purple-300 hover:text-emerald-600">
+            ✓ Pass
+          </button>
+          <button onclick="setEvalChip('failed')" id="evalChipFailed" class="px-2 py-1 rounded-lg font-medium transition text-slate-600 dark:text-purple-300 hover:text-rose-600">
+            ✕ Fail
+          </button>
+        </div>
+        <input type="hidden" id="evalFilter" value="" />
+
+        <!-- Time Range Dropdown -->
+        <select id="timeRangeFilter" onchange="fetchTraces(1)" class="bg-purple-50/50 dark:bg-purple-950/50 text-xs text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl border border-purple-200 dark:border-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-400/30 font-medium cursor-pointer">
+          <option value="">⏱ All Time</option>
+          <option value="15m">Last 15m</option>
+          <option value="1h">Last 1h</option>
+          <option value="24h">Last 24h</option>
+          <option value="7d">Last 7d</option>
+        </select>
+
+        <!-- Environment Dropdown -->
+        <select id="envFilter" onchange="fetchTraces(1)" class="bg-purple-50/50 dark:bg-purple-950/50 text-xs text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl border border-purple-200 dark:border-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-400/30 font-medium">
+          <option value="">All Environments</option>
+          <option value="production">Production</option>
+          <option value="staging">Staging</option>
+          <option value="development">Development</option>
+          <option value="test">Test</option>
+        </select>
+
+        <!-- Project Filter -->
+        <div class="relative w-full sm:w-36">
+          <input
+            id="projectFilter"
+            type="text"
+            placeholder="📁 Project..."
+            oninput="handleSearch()"
+            class="w-full bg-purple-50/50 dark:bg-purple-950/50 text-xs text-slate-800 dark:text-slate-100 px-3 py-2 rounded-xl border border-purple-200 dark:border-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-400/30 placeholder-slate-400"
+          />
+        </div>
+      </div>
+
+      <!-- Right: Trace counter summary -->
+      <div class="text-xs text-purple-900 dark:text-purple-300 font-medium px-2.5 py-1 rounded-lg bg-purple-100/50 dark:bg-purple-950/40 border border-purple-200/60 dark:border-purple-800/60">
+        <span id="traceCountSummary">Showing 0 traces</span>
+      </div>
+    </div>
+
+    <!-- Network / Server Error Alert Banner -->
+    <div id="networkErrorBanner" class="hidden glass-card rounded-2xl p-3.5 border-l-4 border-l-rose-500 bg-rose-50/80 dark:bg-rose-950/40 text-xs flex items-center justify-between shadow-xs transition-all duration-200">
+      <div class="flex items-center space-x-2.5 text-rose-800 dark:text-rose-200">
+        <svg class="w-4 h-4 text-rose-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        <span id="networkErrorMessage" class="font-medium">Network error: Unable to communicate with server.</span>
+      </div>
+      <div class="flex items-center space-x-2 shrink-0">
+        <button onclick="retryNetworkRequest()" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold transition shadow-xs">
+          Retry
+        </button>
+        <button onclick="hideNetworkError()" title="Dismiss" class="text-rose-600 hover:text-rose-900 dark:text-rose-300 dark:hover:text-white px-1.5 py-1 text-xs">
+          ✕
+        </button>
+      </div>
+    </div>
+
+    <!-- Master-Detail Split Grid Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 min-h-[600px]">
+
+      <!-- Left Column: Traces List -->
+      <div id="tracesListCol" class="lg:col-span-5 glass-card rounded-2xl overflow-hidden flex flex-col shadow-sm">
+        
+        <!-- List Header -->
+        <div class="p-3.5 border-b border-purple-100 dark:border-purple-900/40 bg-purple-50/40 dark:bg-purple-950/30 flex items-center justify-between text-xs font-bold text-purple-900 dark:text-purple-200">
+          <span class="flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+            Execution Traces
+          </span>
+          <span class="text-[11px] font-normal text-purple-600 dark:text-purple-400">Click to inspect</span>
+        </div>
+
+        <!-- Scrollable Traces List Container -->
+        <div id="tracesContainer" class="divide-y divide-purple-100/80 dark:divide-purple-900/40 overflow-y-auto flex-1 max-h-[720px]">
+          <div class="p-12 text-center text-slate-400 dark:text-purple-400 text-sm">
+            Loading traces...
+          </div>
+        </div>
+
+        <!-- Pagination Controls Footer -->
+        <div id="paginationBar" class="p-2.5 border-t border-purple-100 dark:border-purple-900/40 bg-purple-50/50 dark:bg-purple-950/30 flex items-center justify-between text-xs text-slate-600 dark:text-purple-300">
+          <button id="prevPageBtn" onclick="goToPage(currentPage - 1)" disabled class="px-2.5 py-1 rounded-lg border border-purple-200 dark:border-purple-800 bg-white dark:bg-purple-900/40 text-purple-700 dark:text-purple-200 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-purple-50 dark:hover:bg-purple-800 font-medium transition shadow-xs flex items-center gap-1">
+            ← Prev
+          </button>
+          <span id="pageIndicator" class="font-medium text-purple-900 dark:text-purple-200">Page 1 of 1</span>
+          <button id="nextPageBtn" onclick="goToPage(currentPage + 1)" disabled class="px-2.5 py-1 rounded-lg border border-purple-200 dark:border-purple-800 bg-white dark:bg-purple-900/40 text-purple-700 dark:text-purple-200 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-purple-50 dark:hover:bg-purple-800 font-medium transition shadow-xs flex items-center gap-1">
+            Next →
+          </button>
+        </div>
+      </div>
+
+      <!-- Right Column: Trace Detail Inspector -->
+      <div id="traceDetailCol" class="lg:col-span-7 glass-card rounded-2xl flex flex-col overflow-hidden shadow-sm">
+        
+        <!-- Empty State Prompt -->
+        <div id="emptyDetailState" class="flex-1 flex flex-col items-center justify-center p-12 text-center text-slate-400 dark:text-purple-400 space-y-3">
+          <div class="w-16 h-16 rounded-2xl bg-purple-100 dark:bg-purple-950/80 border border-purple-200 dark:border-purple-800 flex items-center justify-center text-purple-600 dark:text-purple-400">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+          </div>
+          <p class="text-sm font-medium text-slate-600 dark:text-purple-200">Select any trace from the left panel to inspect</p>
+          <p class="text-xs text-slate-400 dark:text-purple-400 max-w-sm">View interactive workflow DAG topology, waterfall execution timeline, state mutations diffs, and LLM payloads.</p>
+        </div>
+
+        <!-- Active Trace Detail Content View -->
+        <div id="activeDetailContent" class="hidden flex-1 flex flex-col max-h-[720px]">
+          
+          <!-- Detail Header -->
+          <div class="p-4 border-b border-purple-100 dark:border-purple-900/40 bg-purple-50/30 dark:bg-purple-950/20 flex items-start justify-between flex-wrap gap-2">
+            <div>
+              <div class="flex items-center space-x-2 flex-wrap gap-1.5">
+                <span id="detailStatusBadge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"></span>
+                <span id="detailEnvBadge" class="px-2 py-0.5 rounded-md text-[10px] font-medium border uppercase tracking-wider"></span>
+                <span id="detailProjectBadge" class="hidden px-2 py-0.5 rounded-md text-[10px] font-mono bg-purple-100 text-purple-800 border border-purple-200 dark:bg-purple-900 dark:text-purple-200"></span>
+                <span id="detailCostBadge" class="hidden px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300"></span>
+                <span id="detailToolLoopBadge" class="hidden px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300">🔁 Tool Loop</span>
+                <span id="detailSpanCountBadge" class="hidden px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950 dark:text-amber-300">⚠️ Outlier</span>
+                <h2 id="detailTraceName" class="text-sm font-bold text-slate-900 dark:text-white"></h2>
+              </div>
+              
+              <div class="flex items-center space-x-2 text-xs text-slate-500 dark:text-purple-300 mt-1.5 flex-wrap">
+                <span class="flex items-center gap-1">
+                  <span class="text-slate-400 dark:text-purple-400">ID:</span>
+                  <span id="detailTraceId" class="mono font-medium text-slate-700 dark:text-purple-200"></span>
+                  <button onclick="copyDetailTraceId()" title="Copy Trace ID" class="text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-200 transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                    </svg>
+                  </button>
+                </span>
+                <span>•</span>
+                <span id="detailDuration" class="text-purple-700 dark:text-purple-300 font-semibold font-mono"></span>
+                <span>•</span>
+                <span id="detailTimestamp" class="text-slate-500 dark:text-purple-400"></span>
+              </div>
+            </div>
+
+            <!-- Tab Buttons & Quick Action -->
+            <div class="flex items-center space-x-1.5 flex-wrap gap-1">
+              <div class="flex space-x-1 bg-purple-100/70 dark:bg-purple-950/70 p-1 rounded-xl border border-purple-200/80 dark:border-purple-800/80 text-xs font-medium">
+                <button onclick="switchTab('dag')" id="tabBtnDag" class="px-3 py-1.5 rounded-lg text-white bg-purple-600 shadow-xs transition flex items-center gap-1.5 font-semibold">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>
+                  Graph DAG
+                </button>
+                <button onclick="switchTab('waterfall')" id="tabBtnWaterfall" class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-purple-300 hover:text-purple-900 dark:hover:text-white transition">Waterfall</button>
+                <button onclick="switchTab('nodes')" id="tabBtnNodes" class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-purple-300 hover:text-purple-900 dark:hover:text-white transition">Nodes & State</button>
+                <button onclick="switchTab('llm')" id="tabBtnLlm" class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-purple-300 hover:text-purple-900 dark:hover:text-white transition">LLM & Tools</button>
+                <button onclick="switchTab('evals')" id="tabBtnEvals" class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-purple-300 hover:text-purple-900 dark:hover:text-white transition flex items-center gap-1">
+                  <span>🎯 Evals</span>
+                  <span id="tabEvalsBadge" class="hidden text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-purple-200 dark:bg-purple-800 text-purple-900 dark:text-purple-100">0</span>
+                </button>
+                <button onclick="switchTab('raw')" id="tabBtnRaw" class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-purple-300 hover:text-purple-900 dark:hover:text-white transition">Raw JSON</button>
+              </div>
+              <button onclick="openCompareModal(selectedTraceId)" title="Compare side-by-side with another trace" class="px-2.5 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 font-semibold text-xs transition flex items-center gap-1 shadow-xs">
+                <span>⚖️ Compare</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Tool Loop Alert Banner -->
+          <div id="detailToolLoopBanner" class="hidden mx-4 mt-3 p-3 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50/90 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200 text-xs flex items-center justify-between shadow-xs">
+            <div class="flex items-center space-x-2.5">
+              <span class="text-base">🔁</span>
+              <div>
+                <span class="font-bold">Infinite Tool Cycle Detected:</span>
+                <span id="detailToolLoopMsg" class="ml-1">Repeated tool invocation pattern detected, risking runaway cost and hung execution.</span>
+              </div>
+            </div>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-rose-200 dark:bg-rose-900/80 text-rose-800 dark:text-rose-100">Class 3 Alert</span>
+          </div>
+
+          <!-- Tab Content Scrollable Body -->
+          <div class="flex-1 overflow-y-auto p-4 space-y-4">
+
+            <!-- Universal Node / Span Inspector Drawer (Slides up when a node or waterfall span is clicked) -->
+            <div id="dagNodeDrawer" class="hidden bg-white dark:bg-[#1a102e] border-2 border-purple-300 dark:border-purple-700 rounded-2xl p-4 space-y-3 shadow-lg shadow-purple-900/10 transition-all duration-200">
+              <div class="flex items-center justify-between border-b border-purple-100 dark:border-purple-900 pb-2">
+                <div class="flex items-center space-x-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-purple-600"></span>
+                  <span id="drawerNodeName" class="font-bold text-slate-900 dark:text-white text-sm"></span>
+                  <span id="drawerNodeStatus" class="text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase"></span>
+                  <span id="drawerNodeDuration" class="mono text-xs text-purple-700 dark:text-purple-300 font-semibold"></span>
+                </div>
+                <button onclick="closeDagDrawer()" class="text-slate-400 hover:text-slate-700 dark:hover:text-white text-xs px-2.5 py-1 bg-purple-50 dark:bg-purple-900/50 rounded-lg border border-purple-200 dark:border-purple-800 transition font-medium">
+                  Close ✕
+                </button>
+              </div>
+              <div id="drawerNodeContent" class="space-y-2"></div>
+            </div>
+
+            <!-- Tab 0: Graph DAG -->
+            <div id="tabContentDag" class="space-y-3">
+              <div class="flex items-center justify-between pb-2 border-b border-purple-100 dark:border-purple-900/40 text-xs flex-wrap gap-2">
+                <div class="flex items-center space-x-2 text-slate-600 dark:text-purple-300">
+                  <span class="font-bold text-slate-800 dark:text-white">Workflow Topology</span>
+                  <span class="text-[11px] text-slate-500">• Click nodes to inspect inputs & state diffs</span>
+                </div>
+                
+                <div class="flex items-center space-x-2 text-[11px]">
+                  <!-- Legend -->
+                  <div class="flex items-center space-x-2 bg-white dark:bg-purple-950/60 px-2.5 py-1 rounded-lg border border-purple-200 dark:border-purple-800 shadow-xs">
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Success</span>
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Failed</span>
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Running</span>
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600"></span> Untraversed</span>
+                  </div>
+                  <!-- Zoom Controls -->
+                  <div class="flex items-center bg-white dark:bg-purple-950/60 rounded-lg border border-purple-200 dark:border-purple-800 p-0.5 shadow-xs">
+                    <button onclick="zoomDag(-0.15)" title="Zoom Out" class="px-2 py-0.5 text-slate-600 hover:text-purple-700 dark:text-purple-300 rounded font-bold">−</button>
+                    <button onclick="resetDagZoom()" title="Reset Zoom" class="px-2 py-0.5 text-slate-600 hover:text-purple-700 dark:text-purple-300 text-[10px] font-medium">100%</button>
+                    <button onclick="zoomDag(0.15)" title="Zoom In" class="px-2 py-0.5 text-slate-600 hover:text-purple-700 dark:text-purple-300 rounded font-bold">+</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- DAG Viewport Canvas -->
+              <div class="relative bg-purple-50/30 dark:bg-purple-950/30 rounded-2xl border border-purple-200/80 dark:border-purple-900/60 p-4 min-h-[360px] flex items-center justify-center overflow-auto" id="dagViewport">
+                <div id="dagContainer" class="w-full flex justify-center transition-transform duration-150 origin-center">
+                  <!-- Mermaid rendered SVG -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 1: Waterfall Timeline -->
+            <div id="tabContentWaterfall" class="hidden space-y-3">
+              <div class="text-xs text-slate-500 dark:text-purple-300 flex items-center justify-between pb-2 border-b border-purple-100 dark:border-purple-900/40">
+                <span class="font-semibold">Span Execution Timeline</span>
+                <div class="flex items-center space-x-3 text-[11px]">
+                  <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-indigo-500"></span> Node</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span> LLM</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-purple-500"></span> Tool</span>
+                  <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-violet-600"></span> Workflow</span>
+                </div>
+              </div>
+              <div id="waterfallBars" class="space-y-2"></div>
+            </div>
+
+            <!-- Tab 2: Nodes & State Diff Inspector -->
+            <div id="tabContentNodes" class="hidden space-y-3">
+              <div class="text-xs text-slate-500 dark:text-purple-300">
+                LangGraph node executions and exact state diffs.
+              </div>
+              <div id="nodesList" class="space-y-3"></div>
+            </div>
+
+            <!-- Tab 3: LLM & Tool Calls -->
+            <div id="tabContentLlm" class="hidden space-y-3">
+              <div id="llmSummaryBanner" class="p-3.5 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 rounded-2xl space-y-2">
+                <!-- Dynamically populated -->
+              </div>
+              <div id="llmCallsList" class="space-y-3"></div>
+            </div>
+
+            <!-- Tab 4: Raw JSON -->
+            <div id="tabContentRaw" class="hidden space-y-2">
+              <div class="flex justify-end gap-2">
+                <button onclick="downloadTraceJson()" class="text-xs bg-purple-50 hover:bg-purple-100 dark:bg-purple-950 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-purple-800 font-medium transition">
+                  ⬇ Download JSON
+                </button>
+                <button onclick="copyRawJson()" class="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg shadow-xs font-medium transition">
+                  Copy JSON
+                </button>
+              </div>
+              <pre id="rawJsonViewer" class="mono text-xs p-4 bg-slate-50 dark:bg-[#0f172a] rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-x-auto text-slate-800 dark:text-slate-200 max-h-[500px] leading-relaxed select-text"></pre>
+            </div>
+
+            <!-- Tab 5: Evals -->
+            <div id="tabContentEvals" class="hidden space-y-3">
+              <div id="evalsList" class="space-y-3"></div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    let currentTraces = [];
+    let selectedTraceId = null;
+    let autoRefreshInterval = null;
+    let refreshIntervalMs = 3000;
+    let searchDebounce = null;
+    let activeTab = 'dag';
+    let currentTraceData = null;
+    let totalCount = null;
+    let currentPage = 1;
+    const pageSize = 50;
+
+    const BASE_PATH = window.location.pathname.replace(/\/$/, "");
+
+    // Toast Alert Helper
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const bgClass = type === 'success' ? 'bg-emerald-600 text-white' : 'bg-purple-700 text-white';
+      toast.className = `toast ${bgClass} px-4 py-2 rounded-xl text-xs font-medium shadow-lg pointer-events-auto flex items-center space-x-2`;
+      toast.innerHTML = `<span>${message}</span>`;
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.add('show'));
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 2500);
+    }
+
+    // Network Error Banner Management
+    function showNetworkError(msg) {
+      const banner = document.getElementById('networkErrorBanner');
+      const msgEl = document.getElementById('networkErrorMessage');
+      if (banner && msgEl) {
+        msgEl.innerText = msg || 'Network error: Unable to communicate with server.';
+        banner.classList.remove('hidden');
+      }
+    }
+
+    function hideNetworkError() {
+      const banner = document.getElementById('networkErrorBanner');
+      if (banner) banner.classList.add('hidden');
+    }
+
+    function retryNetworkRequest() {
+      hideNetworkError();
+      fetchDashboard(currentPage, true);
+      if (selectedTraceId) {
+        selectTrace(selectedTraceId);
+      }
+    }
+
+    // Modal API Key Management
+    function openApiKeyModal() {
+      const modal = document.getElementById('apiKeyModal');
+      const input = document.getElementById('apiKeyInput');
+      input.value = localStorage.getItem('observe_api_key') || '';
+      input.type = 'password';
+      const toggleBtn = document.getElementById('toggleKeyVisibilityBtn');
+      if (toggleBtn) toggleBtn.innerText = '👁';
+      modal.classList.remove('hidden');
+      setTimeout(() => input.focus(), 50);
+    }
+
+    function closeApiKeyModal() {
+      document.getElementById('apiKeyModal').classList.add('hidden');
+    }
+
+    function toggleApiKeyVisibility() {
+      const input = document.getElementById('apiKeyInput');
+      const btn = document.getElementById('toggleKeyVisibilityBtn');
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.innerText = '🙈';
+      } else {
+        input.type = 'password';
+        btn.innerText = '👁';
+      }
+    }
+
+    function saveApiKeyFromModal() {
+      const input = document.getElementById('apiKeyInput');
+      const val = input.value.trim();
+      if (val) {
+        localStorage.setItem('observe_api_key', val);
+        showToast('API Key saved successfully', 'success');
+      } else {
+        localStorage.removeItem('observe_api_key');
+        showToast('API Key cleared');
+      }
+      updateApiKeyUI();
+      closeApiKeyModal();
+      fetchDashboard(1);
+    }
+
+    function clearApiKeyFromModal() {
+      localStorage.removeItem('observe_api_key');
+      document.getElementById('apiKeyInput').value = '';
+      updateApiKeyUI();
+      showToast('API Key removed');
+      closeApiKeyModal();
+      fetchDashboard(1);
+    }
+
+    // Syntax Highlighter for JSON (Pattern 1: VS Code / DevTools High-Contrast Palette)
+    function syntaxHighlightJson(jsonVal) {
+      if (jsonVal === undefined || jsonVal === null) {
+        return '<span class="text-slate-400 dark:text-slate-500 italic">null</span>';
+      }
+      let str;
+      if (typeof jsonVal === 'string') {
+        try {
+          str = JSON.stringify(JSON.parse(jsonVal), null, 2);
+        } catch {
+          const escaped = jsonVal.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          return `<span class="text-emerald-700 dark:text-emerald-400">${escaped}</span>`;
+        }
+      } else {
+        try {
+          str = JSON.stringify(jsonVal, null, 2);
+        } catch {
+          str = String(jsonVal);
+        }
+      }
+
+      if (!str) return '';
+
+      // HTML escape
+      str = str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      // Color-code tokens: Keys, Strings, Booleans, Nulls, Numbers
+      return str.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) {
+            const keyPart = match.slice(0, -1);
+            return `<span class="text-sky-700 dark:text-sky-400 font-semibold">${keyPart}</span><span class="text-slate-400 dark:text-slate-500">:</span>`;
+          } else {
+            return `<span class="text-emerald-700 dark:text-emerald-400">${match}</span>`;
+          }
+        } else if (/true|false/.test(match)) {
+          return `<span class="text-violet-600 dark:text-violet-400 font-bold">${match}</span>`;
+        } else if (/null/.test(match)) {
+          return `<span class="text-slate-400 dark:text-slate-500 italic font-medium">${match}</span>`;
+        } else {
+          return `<span class="text-amber-600 dark:text-amber-400 font-mono">${match}</span>`;
+        }
+      });
+    }
+
+    // Theme Management
+    function initTheme() {
+      const savedTheme = localStorage.getItem('observe_theme') || 'light';
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+        document.getElementById('sunIcon').classList.remove('hidden');
+        document.getElementById('moonIcon').classList.add('hidden');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+        document.getElementById('sunIcon').classList.add('hidden');
+        document.getElementById('moonIcon').classList.remove('hidden');
+      }
+    }
+
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.contains('dark');
+      if (isDark) {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+        localStorage.setItem('observe_theme', 'light');
+        document.getElementById('sunIcon').classList.add('hidden');
+        document.getElementById('moonIcon').classList.remove('hidden');
+      } else {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+        localStorage.setItem('observe_theme', 'dark');
+        document.getElementById('sunIcon').classList.remove('hidden');
+        document.getElementById('moonIcon').classList.add('hidden');
+      }
+      if (currentTraceData && activeTab === 'dag') {
+        renderDagGraph(currentTraceData);
+      }
+    }
+
+    // API Key Auth
+    function getApiKey() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const queryKey = urlParams.get('api_key');
+      if (queryKey) {
+        localStorage.setItem('observe_api_key', queryKey);
+        return queryKey;
+      }
+      return localStorage.getItem('observe_api_key') || '';
+    }
+
+    function promptApiKey() {
+      openApiKeyModal();
+    }
+
+    function updateApiKeyUI() {
+      const btn = document.getElementById('apiKeyStatus');
+      if (!btn) return;
+      const key = localStorage.getItem('observe_api_key');
+      if (key) {
+        btn.innerText = '🔑 Key Set';
+        btn.parentElement.classList.add('border-emerald-300', 'text-emerald-700', 'bg-emerald-50');
+      } else {
+        btn.innerText = '🔑 Auth';
+        btn.parentElement.classList.remove('border-emerald-300', 'text-emerald-700', 'bg-emerald-50');
+      }
+    }
+
+    async function apiFetch(url, options = {}) {
+      options.headers = options.headers || {};
+      const key = getApiKey();
+      if (key) {
+        if (options.headers instanceof Headers) {
+          options.headers.set('X-API-Key', key);
+        } else {
+          options.headers['X-API-Key'] = key;
+        }
+      }
+      try {
+        const res = await fetch(url, options);
+        if (res.status === 401) {
+          const keyStatus = document.getElementById('apiKeyStatus');
+          if (keyStatus) {
+            keyStatus.innerText = '⚠️ 401 Auth';
+            keyStatus.parentElement.classList.add('border-rose-300', 'text-rose-700', 'bg-rose-50');
+          }
+        } else if (res.status === 429) {
+          showNetworkError("Rate limit exceeded (HTTP 429). Pausing requests...");
+        } else if (res.status >= 500) {
+          showNetworkError(`Server degraded (${res.status}): Please check backend health & storage.`);
+        } else {
+          hideNetworkError();
+        }
+        return res;
+      } catch (err) {
+        console.error("API fetch network error:", err);
+        showNetworkError(`Network unreachable: ${err.message || 'Failed to connect'}`);
+        throw err;
+      }
+    }
+
+    // Relative Time Formatter
+    function getRelativeTime(timestamp) {
+      const now = new Date();
+      const past = new Date(timestamp);
+      const diffMs = now - past;
+      const diffSec = Math.floor(diffMs / 1000);
+      if (diffSec < 5) return 'just now';
+      if (diffSec < 60) return `${diffSec}s ago`;
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHour = Math.floor(diffMin / 60);
+      if (diffHour < 24) return `${diffHour}h ago`;
+      return past.toLocaleDateString();
+    }
+
+    // Stats UI Update
+    function updateStatsUI(stats) {
+      if (!stats) return;
+      document.getElementById('metricTotalTraces').innerText = stats.total_traces ?? 0;
+      document.getElementById('metricSuccessRate').innerText = `${stats.success_rate ?? 0}%`;
+      document.getElementById('metricAvgDuration').innerText = `${stats.avg_duration_ms ?? 0}ms`;
+      document.getElementById('metricP95Duration').innerText = `${stats.p95_duration_ms ?? 0}ms`;
+      document.getElementById('metricTotalTokens').innerText = (stats.total_tokens ?? 0).toLocaleString();
+      const totalCost = stats.total_cost ?? 0;
+      document.getElementById('metricTotalCost').innerText = totalCost >= 1 ? `$${totalCost.toFixed(2)}` : (totalCost > 0 ? `$${totalCost.toFixed(4)}` : '$0.00');
+      document.getElementById('metricTotalLLM').innerText = stats.total_llm_calls ?? 0;
+    }
+
+    // Stats Fetching
+    async function fetchStats() {
+      try {
+        const res = await apiFetch(`${BASE_PATH}/api/stats`);
+        if (!res.ok) return;
+        const stats = await res.json();
+        updateStatsUI(stats);
+      } catch (e) {
+        console.error("Failed fetching stats", e);
+      }
+    }
+
+    // Single-Flight Dashboard Fetching (Combined Stats + Traces)
+    async function fetchDashboard(page = 1, preserveScroll = false) {
+      currentPage = Math.max(1, page);
+      try {
+        const search = document.getElementById('searchInput')?.value || '';
+        const status = document.getElementById('statusFilter')?.value || '';
+        const evalStatus = document.getElementById('evalFilter')?.value || '';
+        const timeRange = document.getElementById('timeRangeFilter')?.value || '';
+        const envEl = document.getElementById('envFilter');
+        const projEl = document.getElementById('projectFilter');
+        const environment = envEl ? envEl.value : '';
+        const project = projEl ? projEl.value.trim() : '';
+
+        const offset = (currentPage - 1) * pageSize;
+
+        const params = new URLSearchParams();
+        params.set('limit', pageSize);
+        params.set('offset', offset);
+        if (search) params.set('search', search);
+        if (status) params.set('status', status);
+        if (evalStatus) params.set('eval_status', evalStatus);
+        if (environment) params.set('environment', environment);
+        if (project) params.set('project', project);
+
+        if (timeRange) {
+          const now = Date.now();
+          let deltaMs = 0;
+          if (timeRange === '15m') deltaMs = 15 * 60 * 1000;
+          else if (timeRange === '1h') deltaMs = 60 * 60 * 1000;
+          else if (timeRange === '24h') deltaMs = 24 * 60 * 60 * 1000;
+          else if (timeRange === '7d') deltaMs = 7 * 24 * 60 * 60 * 1000;
+          if (deltaMs > 0) {
+            params.set('from_time', new Date(now - deltaMs).toISOString());
+          }
+        }
+
+        const prevScroll = preserveScroll ? document.getElementById('tracesContainer')?.scrollTop : 0;
+
+        const res = await apiFetch(`${BASE_PATH}/api/dashboard?${params.toString()}`);
+        if (!res.ok) {
+          // Graceful fallback to legacy endpoints if /api/dashboard not available
+          fetchStats();
+          fetchTraces(page, preserveScroll);
+          return;
+        }
+        const data = await res.json();
+        if (data.stats) updateStatsUI(data.stats);
+        if (data.traces) {
+          currentTraces = data.traces;
+          totalCount = data.total_count ?? currentTraces.length;
+          renderTracesList();
+          renderPagination();
+        }
+
+        if (preserveScroll && prevScroll) {
+          const el = document.getElementById('tracesContainer');
+          if (el) el.scrollTop = prevScroll;
+        }
+      } catch (e) {
+        console.error("Failed fetching dashboard data", e);
+      }
+    }
+
+
+    // Quick Status Filter Chips
+    function setStatusChip(status) {
+      document.getElementById('statusFilter').value = status;
+      const chips = ['All', 'Completed', 'Failed', 'Running'];
+      chips.forEach(c => {
+        const btn = document.getElementById(`statusChip${c}`);
+        if (!btn) return;
+        if ((c === 'All' && status === '') || (c.toLowerCase() === status.toLowerCase())) {
+          btn.className = "px-2.5 py-1 rounded-lg font-bold transition bg-white dark:bg-purple-800 text-purple-900 dark:text-white shadow-xs";
+        } else {
+          btn.className = "px-2.5 py-1 rounded-lg font-medium transition text-slate-600 dark:text-purple-300 hover:text-purple-900 dark:hover:text-white";
+        }
+      });
+      fetchTraces(1);
+    }
+
+    // Quick Eval Status Filter Chips
+    function setEvalChip(evalStatus) {
+      const el = document.getElementById('evalFilter');
+      if (el) el.value = evalStatus;
+      const chips = [
+        { id: 'evalChipAll', val: '' },
+        { id: 'evalChipPassed', val: 'passed' },
+        { id: 'evalChipFailed', val: 'failed' },
+      ];
+      chips.forEach(c => {
+        const btn = document.getElementById(c.id);
+        if (!btn) return;
+        if (c.val === evalStatus) {
+          btn.className = "px-2 py-1 rounded-lg font-bold transition bg-white dark:bg-purple-800 text-purple-900 dark:text-white shadow-xs";
+        } else {
+          btn.className = "px-2 py-1 rounded-lg font-medium transition text-slate-600 dark:text-purple-300 hover:text-purple-900 dark:hover:text-white";
+        }
+      });
+      fetchTraces(1);
+    }
+
+    // Traces Fetching with Pagination and Filters
+    async function fetchTraces(page = 1, preserveScroll = false) {
+      currentPage = Math.max(1, page);
+      try {
+        const search = document.getElementById('searchInput').value;
+        const status = document.getElementById('statusFilter').value;
+        const evalStatus = document.getElementById('evalFilter')?.value || '';
+        const timeRange = document.getElementById('timeRangeFilter')?.value || '';
+        const envEl = document.getElementById('envFilter');
+        const projEl = document.getElementById('projectFilter');
+        const environment = envEl ? envEl.value : '';
+        const project = projEl ? projEl.value.trim() : '';
+
+        const offset = (currentPage - 1) * pageSize;
+
+        const params = new URLSearchParams();
+        params.set('limit', pageSize);
+        params.set('offset', offset);
+        if (search) params.set('search', search);
+        if (status) params.set('status', status);
+        if (evalStatus) params.set('eval_status', evalStatus);
+        if (environment) params.set('environment', environment);
+        if (project) params.set('project', project);
+
+        if (timeRange) {
+          const now = Date.now();
+          let deltaMs = 0;
+          if (timeRange === '15m') deltaMs = 15 * 60 * 1000;
+          else if (timeRange === '1h') deltaMs = 60 * 60 * 1000;
+          else if (timeRange === '24h') deltaMs = 24 * 60 * 60 * 1000;
+          else if (timeRange === '7d') deltaMs = 7 * 24 * 60 * 60 * 1000;
+          if (deltaMs > 0) {
+            params.set('from_time', new Date(now - deltaMs).toISOString());
+          }
+        }
+
+        const prevScroll = preserveScroll ? document.getElementById('tracesContainer')?.scrollTop : 0;
+
+        const res = await apiFetch(`${BASE_PATH}/api/traces?${params.toString()}`);
+        if (!res.ok) return;
+        currentTraces = await res.json();
+        const totalHeader = res.headers.get('X-Total-Count');
+        totalCount = totalHeader ? parseInt(totalHeader, 10) : currentTraces.length;
+
+        renderTracesList();
+        renderPagination();
+
+        if (preserveScroll && prevScroll) {
+          const el = document.getElementById('tracesContainer');
+          if (el) el.scrollTop = prevScroll;
+        }
+      } catch (e) {
+        console.error("Failed fetching traces", e);
+      }
+    }
+
+    function renderPagination() {
+      const total = totalCount || 0;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+
+      const indicator = document.getElementById('pageIndicator');
+      if (indicator) {
+        indicator.innerText = `Page ${currentPage} of ${totalPages} (${total} total)`;
+      }
+
+      const prevBtn = document.getElementById('prevPageBtn');
+      if (prevBtn) prevBtn.disabled = (currentPage <= 1);
+
+      const nextBtn = document.getElementById('nextPageBtn');
+      if (nextBtn) nextBtn.disabled = (currentPage >= totalPages);
+    }
+
+    function goToPage(page) {
+      const totalPages = Math.max(1, Math.ceil((totalCount || 0) / pageSize));
+      const target = Math.max(1, Math.min(totalPages, page));
+      if (target !== currentPage) {
+        fetchTraces(target, false);
+      }
+    }
+
+    function updateRelativeTimestamps() {
+      document.querySelectorAll('.rel-time').forEach(el => {
+        const ts = el.getAttribute('data-timestamp');
+        if (ts) el.innerText = getRelativeTime(ts);
+      });
+    }
+
+    function renderTracesList() {
+      const container = document.getElementById('tracesContainer');
+      const countLabel = (totalCount !== null && totalCount > currentTraces.length)
+        ? `Showing ${currentTraces.length} of ${totalCount} traces`
+        : `Showing ${currentTraces.length} trace${currentTraces.length === 1 ? '' : 's'}`;
+      document.getElementById('traceCountSummary').innerText = countLabel;
+
+      if (!currentTraces || currentTraces.length === 0) {
+        container.innerHTML = `
+          <div class="p-12 text-center text-slate-400 dark:text-purple-400 space-y-2">
+            <svg class="w-10 h-10 mx-auto text-purple-300 dark:text-purple-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+            </svg>
+            <p class="text-sm font-semibold text-slate-600 dark:text-purple-300">No traces found</p>
+            <p class="text-xs text-slate-400 dark:text-purple-400">Trigger your graph or API endpoint to start collecting observability traces.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = currentTraces.map(t => {
+        const isSelected = t.id === selectedTraceId;
+        const isSuccess = t.status === 'completed' && !t.has_error;
+        const isFailed = t.status === 'failed' || t.has_error;
+
+        const leftBorderColor = isSuccess
+          ? 'border-l-emerald-500'
+          : isFailed
+          ? 'border-l-rose-500'
+          : 'border-l-amber-500';
+
+        const statusBadge = isSuccess
+          ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">✓ OK</span>'
+          : isFailed
+          ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800">✕ Failed</span>'
+          : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse dark:bg-amber-950 dark:text-amber-300">⚡ Running</span>';
+
+        const methodBadge = t.http_method
+          ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
+              t.http_method === 'GET' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' :
+              t.http_method === 'POST' ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300' :
+              'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+            }">${t.http_method}</span>`
+          : '';
+
+        const projectBadge = t.project ? `<span class="px-1.5 py-0.2 rounded text-[10px] bg-purple-50 text-purple-700 border border-purple-200/80 font-mono">📁 ${t.project}</span>` : '';
+        const evalBadge = (t.eval_status)
+          ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+              t.eval_status === 'passed'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800'
+                : 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800'
+            }">🎯 ${t.eval_status === 'passed' ? 'Pass' : 'Fail'}${t.eval_count ? ` (${t.eval_count})` : ''}</span>`
+          : '';
+        const relTime = getRelativeTime(t.start_time);
+        const duration = t.duration_ms != null ? `${t.duration_ms}ms` : 'running...';
+        const costBadge = (t.estimated_cost && t.estimated_cost > 0)
+          ? `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">$${t.estimated_cost < 0.01 ? t.estimated_cost.toFixed(4) : t.estimated_cost.toFixed(3)}</span>`
+          : '';
+
+        const loopBadge = (t.has_tool_loop)
+          ? `<span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300" title="Tool loop detected: repeated tool calls">🔁 Loop</span>`
+          : '';
+        const outlierBadge = (t.total_spans > 25)
+          ? `<span class="px-1.5 py-0.2 rounded text-[10px] font-medium bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950 dark:text-amber-300" title="High span count outlier (${t.total_spans} spans)">⚠️ ${t.total_spans} spans</span>`
+          : '';
+
+        return `
+          <div id="trace-item-${t.id}" onclick="selectTrace('${t.id}')" class="p-3.5 cursor-pointer transition-all flex flex-col gap-1.5 border-l-4 ${leftBorderColor} ${
+            isSelected
+              ? 'bg-purple-100/60 dark:bg-purple-900/40'
+              : 'hover:bg-purple-50/50 dark:hover:bg-purple-950/40'
+          }">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center space-x-2 truncate">
+                ${methodBadge}
+                <span class="text-xs font-bold text-slate-900 dark:text-white truncate">${t.name}</span>
+                ${projectBadge}
+              </div>
+              <div class="flex items-center space-x-1.5 shrink-0">
+                ${loopBadge}
+                ${outlierBadge}
+                ${evalBadge}
+                ${statusBadge}
+                <button onclick="event.stopPropagation(); openCompareModal('${t.id}')" title="Compare this trace" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 transition shadow-xs">
+                  ⚖️
+                </button>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-purple-300 mt-0.5">
+              <div class="flex items-center space-x-1.5">
+                <span class="mono text-slate-400 dark:text-purple-400">${t.id.slice(0, 8)}...</span>
+                <span>•</span>
+                <span>${t.total_spans} span${t.total_spans === 1 ? '' : 's'}</span>
+                ${t.total_tokens > 0 ? `<span>•</span><span class="text-amber-700 dark:text-amber-300 font-mono font-medium">${t.total_tokens.toLocaleString()} toks</span>` : ''}
+                ${costBadge ? `<span>•</span>${costBadge}` : ''}
+              </div>
+              <div class="flex items-center space-x-2">
+                <span class="text-purple-700 dark:text-purple-300 font-mono font-bold">${duration}</span>
+                <span class="rel-time text-slate-400 dark:text-purple-400" data-timestamp="${t.start_time}">${relTime}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function selectTrace(traceId) {
+      selectedTraceId = traceId;
+      renderTracesList();
+
+      try {
+        const res = await apiFetch(`${BASE_PATH}/api/traces/${traceId}`);
+        if (!res.ok) return;
+        currentTraceData = await res.json();
+        renderTraceDetail(currentTraceData);
+      } catch (e) {
+        console.error("Failed fetching trace detail", e);
+      }
+    }
+
+    function renderTraceDetail(t) {
+      document.getElementById('emptyDetailState').classList.add('hidden');
+      document.getElementById('activeDetailContent').classList.remove('hidden');
+
+      document.getElementById('detailTraceName').innerText = t.name;
+      document.getElementById('detailTraceId').innerText = t.id;
+      document.getElementById('detailDuration').innerText = t.duration_ms != null ? `${t.duration_ms} ms` : 'Running...';
+      document.getElementById('detailTimestamp').innerText = new Date(t.start_time).toLocaleString();
+
+      const isSuccess = t.status === 'completed';
+      const badge = document.getElementById('detailStatusBadge');
+      badge.innerText = t.status;
+      badge.className = `px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+        isSuccess ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300'
+      }`;
+
+      const envEl = document.getElementById('detailEnvBadge');
+      if (envEl) {
+        const env = t.environment || 'production';
+        envEl.innerText = env;
+        let envClass = 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950 dark:text-purple-300';
+        envEl.className = `px-2 py-0.5 rounded-md text-[10px] font-medium border uppercase tracking-wider ${envClass}`;
+      }
+
+      const projEl = document.getElementById('detailProjectBadge');
+      if (projEl) {
+        if (t.project) {
+          projEl.innerText = `📁 ${t.project}`;
+          projEl.classList.remove('hidden');
+        } else {
+          projEl.classList.add('hidden');
+        }
+      }
+
+      const costEl = document.getElementById('detailCostBadge');
+      const traceCost = (t.estimated_cost || (t.llm_metrics ? t.llm_metrics.total_cost : 0)) || 0;
+      if (costEl) {
+        if (traceCost > 0) {
+          costEl.innerText = `$${traceCost < 0.01 ? traceCost.toFixed(5) : traceCost.toFixed(4)}`;
+          costEl.classList.remove('hidden');
+        } else {
+          costEl.classList.add('hidden');
+        }
+      }
+
+      // Tool Loop Detection (Class 3)
+      const hasLoop = t.has_tool_loop || (t.metadata && t.metadata.tool_loop_detected);
+      const loopBadge = document.getElementById('detailToolLoopBadge');
+      const loopBanner = document.getElementById('detailToolLoopBanner');
+      const loopMsg = document.getElementById('detailToolLoopMsg');
+      if (loopBadge) {
+        if (hasLoop) loopBadge.classList.remove('hidden');
+        else loopBadge.classList.add('hidden');
+      }
+      if (loopBanner) {
+        if (hasLoop) {
+          if (loopMsg) {
+            const toolName = (t.metadata && t.metadata.tool_loop_tool) ? `"${t.metadata.tool_loop_tool}"` : 'a tool';
+            const count = (t.metadata && t.metadata.tool_loop_count) ? `${t.metadata.tool_loop_count} times` : 'repeatedly';
+            loopMsg.innerText = `Tool ${toolName} was executed ${count} in a suspected infinite cycle, risking runaway cost and hung workflow.`;
+          }
+          loopBanner.classList.remove('hidden');
+        } else {
+          loopBanner.classList.add('hidden');
+        }
+      }
+
+      // High Span Outlier Warning
+      const totalSpans = (t.total_spans != null ? t.total_spans : (t.spans ? t.spans.length : 0));
+      const spanCountBadge = document.getElementById('detailSpanCountBadge');
+      if (spanCountBadge) {
+        if (totalSpans > 25) {
+          spanCountBadge.innerText = `⚠️ ${totalSpans} Spans`;
+          spanCountBadge.classList.remove('hidden');
+        } else {
+          spanCountBadge.classList.add('hidden');
+        }
+      }
+
+      renderDagGraph(t);
+      renderWaterfall(t);
+      renderNodes(t);
+      renderLlmCalls(t);
+      renderEvals(t);
+      renderRawJson(t);
+    }
+
+    function renderWaterfall(t) {
+      const container = document.getElementById('waterfallBars');
+      const spans = t.spans || [];
+      if (spans.length === 0) {
+        container.innerHTML = `<div class="text-xs text-slate-400 italic py-4">No spans recorded for this trace.</div>`;
+        return;
+      }
+
+      const traceStart = new Date(t.start_time).getTime();
+      const totalDuration = Math.max(t.duration_ms || 1, 1);
+
+      container.innerHTML = spans.map(s => {
+        const spanStart = new Date(s.start_time).getTime();
+        const offsetMs = Math.max(0, spanStart - traceStart);
+        const leftPercent = Math.min(95, Math.max(0, (offsetMs / totalDuration) * 100));
+        const spanDuration = s.duration_ms ?? 0;
+        const widthPercent = Math.max(3, Math.min(100 - leftPercent, (spanDuration / totalDuration) * 100));
+
+        let color = 'bg-purple-600';
+        let badgeColor = 'text-purple-700 bg-purple-100 border-purple-200 dark:bg-purple-900/60 dark:text-purple-200 dark:border-purple-800';
+        if (s.span_type === 'node') {
+          color = 'bg-indigo-500';
+          badgeColor = 'text-indigo-700 bg-indigo-100 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300';
+        } else if (s.span_type === 'llm') {
+          color = 'bg-amber-500';
+          badgeColor = 'text-amber-700 bg-amber-100 border-amber-200 dark:bg-amber-950 dark:text-amber-300';
+        } else if (s.span_type === 'tool') {
+          color = 'bg-fuchsia-500';
+          badgeColor = 'text-fuchsia-700 bg-fuchsia-100 border-fuchsia-200 dark:bg-fuchsia-950 dark:text-fuchsia-300';
+        }
+
+        if (s.status === 'failed') {
+          color = 'bg-rose-500';
+        }
+
+        return `
+          <div onclick="openSpanDrawer('${s.id}')" class="space-y-1.5 bg-purple-50/50 dark:bg-purple-950/40 p-2.5 rounded-xl border border-purple-100 dark:border-purple-900/60 cursor-pointer hover:border-purple-300 dark:hover:border-purple-700 hover:shadow-xs transition">
+            <div class="flex items-center justify-between text-xs">
+              <div class="flex items-center space-x-2 truncate">
+                <span class="text-[10px] px-2 py-0.2 rounded-full uppercase font-bold border ${badgeColor}">${s.span_type}</span>
+                <span class="font-bold text-slate-800 dark:text-white truncate">${s.name}</span>
+              </div>
+              <span class="mono text-xs text-purple-800 dark:text-purple-300 font-bold">${spanDuration}ms</span>
+            </div>
+
+            <!-- Gantt timeline bar -->
+            <div class="w-full bg-purple-100 dark:bg-purple-900/50 h-2.5 rounded-full relative overflow-hidden">
+              <div
+                class="h-full rounded-full ${color} opacity-90 transition-all duration-300 shadow-xs"
+                style="margin-left: ${leftPercent}%; width: ${widthPercent}%;"
+                title="${s.name} (${spanDuration}ms) — Click to inspect"
+              ></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openSpanDrawer(spanId) {
+      if (!currentTraceData) return;
+      const span = (currentTraceData.spans || []).find(s => s.id === spanId);
+      if (!span) return;
+
+      if (span.span_type === 'node') {
+        openDagNodeDrawer(span.name);
+        document.getElementById('dagNodeDrawer')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
+
+      const drawer = document.getElementById('dagNodeDrawer');
+      const nameEl = document.getElementById('drawerNodeName');
+      const statusEl = document.getElementById('drawerNodeStatus');
+      const durEl = document.getElementById('drawerNodeDuration');
+      const contentEl = document.getElementById('drawerNodeContent');
+
+      nameEl.innerText = `${span.span_type.toUpperCase()}: ${span.name}`;
+      statusEl.innerText = span.status;
+      const isOk = span.status === 'completed';
+      statusEl.className = `text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase ${
+        isOk ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300'
+      }`;
+      durEl.innerText = `${span.duration_ms ?? 0} ms`;
+
+      let usageHtml = '';
+      if (span.metadata && span.metadata.usage) {
+        const u = span.metadata.usage;
+        usageHtml = `
+          <div class="bg-purple-50/60 dark:bg-purple-950/40 p-2.5 rounded-xl border border-purple-200 dark:border-purple-800 text-xs space-y-1">
+            <div class="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider">Token & Cost Breakdown</div>
+            <div class="flex items-center space-x-3 text-slate-700 dark:text-purple-200 font-mono text-[11px] flex-wrap gap-1">
+              <span>Total: <strong>${(u.total_tokens || 0).toLocaleString()}</strong></span>
+              <span>Prompt: <strong>${(u.prompt_tokens || 0).toLocaleString()}</strong></span>
+              <span>Comp: <strong>${(u.completion_tokens || 0).toLocaleString()}</strong></span>
+              ${u.total_cost != null ? `<span class="text-emerald-700 dark:text-emerald-400 font-bold">Cost: $${Number(u.total_cost).toFixed(5)}</span>` : ''}
+            </div>
+          </div>
+        `;
+      }
+
+      contentEl.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+          <div class="bg-slate-50 dark:bg-[#0f172a] p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Inputs / Call Arguments</div>
+            <pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-32 leading-relaxed">${syntaxHighlightJson(span.inputs)}</pre>
+          </div>
+          <div class="bg-slate-50 dark:bg-[#0f172a] p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Outputs / Generation</div>
+            <pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-32 leading-relaxed">${syntaxHighlightJson(span.outputs)}</pre>
+          </div>
+        </div>
+        ${usageHtml}
+      `;
+
+      drawer.classList.remove('hidden');
+      drawer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function renderNodes(t) {
+      const container = document.getElementById('nodesList');
+      const nodeSpans = (t.spans || []).filter(s => s.span_type === 'node');
+
+      if (nodeSpans.length === 0) {
+        container.innerHTML = `<div class="text-xs text-slate-400 italic py-4">No LangGraph node spans recorded. Wrap graph with observe_graph() or use LangGraphTraceCallbackHandler.</div>`;
+        return;
+      }
+
+      container.innerHTML = nodeSpans.map((s, idx) => {
+        const stepNum = s.metadata && s.metadata.langgraph_step != null ? `Step ${s.metadata.langgraph_step}` : `Node ${idx + 1}`;
+        const hasDiff = s.state_diff && Object.keys(s.state_diff).length > 0;
+
+        let diffHtml = '';
+        if (hasDiff) {
+          diffHtml = `
+            <div class="mt-2.5 bg-slate-50 dark:bg-[#0f172a] p-3 rounded-xl border border-slate-200 dark:border-slate-800/80">
+              <div class="text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                <span>⚡ State Mutations (Diff)</span>
+              </div>
+              <pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto leading-relaxed">${syntaxHighlightJson(s.state_diff)}</pre>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="bg-purple-50/40 dark:bg-purple-950/40 p-3.5 rounded-2xl border border-purple-100 dark:border-purple-900/60 space-y-2.5 shadow-xs">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 text-[10px] font-bold uppercase">${stepNum}</span>
+                <span class="text-sm font-bold text-slate-900 dark:text-white">${s.name}</span>
+              </div>
+              <span class="text-xs mono text-purple-700 dark:text-purple-300 font-bold">${s.duration_ms ?? 0}ms</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+              <div class="bg-slate-50 dark:bg-[#0f172a] p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80">
+                <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Inputs</div>
+                <pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-36 leading-relaxed">${syntaxHighlightJson(s.inputs)}</pre>
+              </div>
+              <div class="bg-slate-50 dark:bg-[#0f172a] p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80">
+                <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Outputs / Updates</div>
+                <pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-36 leading-relaxed">${syntaxHighlightJson(s.outputs)}</pre>
+              </div>
+            </div>
+
+            ${diffHtml}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderLlmCalls(t) {
+      const container = document.getElementById('llmCallsList');
+      const llmSpans = (t.spans || []).filter(s => s.span_type === 'llm' || s.span_type === 'tool');
+
+      const totalTokens = t.llm_metrics ? (t.llm_metrics.total_tokens || 0) : 0;
+      const promptTokens = t.llm_metrics ? (t.llm_metrics.prompt_tokens || 0) : 0;
+      const compTokens = t.llm_metrics ? (t.llm_metrics.completion_tokens || 0) : 0;
+      const totalCalls = t.llm_metrics ? (t.llm_metrics.llm_calls || 0) : 0;
+      const totalCost = t.estimated_cost || (t.llm_metrics ? (t.llm_metrics.total_cost || 0) : 0);
+      const modelUsage = t.llm_metrics && t.llm_metrics.model_usage ? t.llm_metrics.model_usage : {};
+
+      const promptPct = totalTokens > 0 ? Math.round((promptTokens / totalTokens) * 100) : 0;
+      const compPct = totalTokens > 0 ? (100 - promptPct) : 0;
+
+      const banner = document.getElementById('llmSummaryBanner');
+      if (banner) {
+        const modelEntries = Object.entries(modelUsage);
+        const modelPills = modelEntries.map(([m, data]) => {
+          const costStr = data.total_cost > 0 ? ` • $${data.total_cost < 0.01 ? data.total_cost.toFixed(4) : data.total_cost.toFixed(3)}` : '';
+          return `<span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-purple-100 text-purple-800 border border-purple-200 dark:bg-purple-900 dark:text-purple-200">${m} (${data.calls}x${costStr})</span>`;
+        }).join(' ');
+
+        let modelCostBarHtml = '';
+        if (modelEntries.length > 1 && totalCost > 0) {
+          const barPalette = ['bg-violet-600', 'bg-indigo-500', 'bg-fuchsia-500', 'bg-teal-500', 'bg-amber-500', 'bg-sky-500'];
+          const segments = modelEntries.map(([m, data], idx) => {
+            const mCost = data.total_cost || 0;
+            const pct = Math.max(1, Math.round((mCost / totalCost) * 100));
+            const c = barPalette[idx % barPalette.length];
+            return `<div class="${c} h-full transition-all shadow-xs" style="width: ${pct}%" title="${m}: $${mCost < 0.01 ? mCost.toFixed(5) : mCost.toFixed(4)} (${pct}%)"></div>`;
+          }).join('');
+          modelCostBarHtml = `
+            <div class="space-y-1 pt-1.5 border-t border-purple-200/60 dark:border-purple-800/60">
+              <div class="flex items-center justify-between text-[10px] text-purple-700 dark:text-purple-300 font-semibold">
+                <span>Model Cost Distribution:</span>
+                <span class="font-mono text-slate-500 dark:text-purple-400">Total $${totalCost < 0.01 ? totalCost.toFixed(5) : totalCost.toFixed(4)}</span>
+              </div>
+              <div class="w-full bg-purple-200/60 dark:bg-purple-900/60 rounded-full h-2 overflow-hidden flex shadow-xs">
+                ${segments}
+              </div>
+            </div>
+          `;
+        }
+
+        banner.innerHTML = `
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center space-x-3 text-xs">
+              <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Total Tokens: <strong class="text-slate-900 dark:text-white font-mono">${totalTokens.toLocaleString()}</strong></span>
+              <span class="text-purple-300">•</span>
+              <span class="text-slate-600 dark:text-purple-300">Prompt: <strong class="text-indigo-600 dark:text-indigo-300 font-mono">${promptTokens.toLocaleString()}</strong> (${promptPct}%)</span>
+              <span class="text-purple-300">•</span>
+              <span class="text-slate-600 dark:text-purple-300">Completion: <strong class="text-purple-700 dark:text-purple-300 font-mono">${compTokens.toLocaleString()}</strong> (${compPct}%)</span>
+            </div>
+            <div class="flex items-center space-x-2 text-xs">
+              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300">
+                Est. Cost: $${totalCost < 0.01 ? totalCost.toFixed(5) : totalCost.toFixed(4)}
+              </span>
+              <span class="px-2 py-0.5 rounded-md text-[11px] font-mono bg-purple-100 text-purple-800 border border-purple-200 dark:bg-purple-900 dark:text-purple-200">
+                ${totalCalls} LLM Call${totalCalls === 1 ? '' : 's'}
+              </span>
+            </div>
+          </div>
+
+          ${totalTokens > 0 ? `
+            <div class="w-full bg-purple-200/60 dark:bg-purple-900/60 rounded-full h-2 overflow-hidden flex" title="Prompt (${promptPct}%) / Completion (${compPct}%)">
+              <div class="bg-indigo-500 h-full transition-all" style="width: ${promptPct}%"></div>
+              <div class="bg-purple-600 h-full transition-all" style="width: ${compPct}%"></div>
+            </div>
+          ` : ''}
+
+          ${modelCostBarHtml}
+
+          ${modelPills ? `<div class="flex items-center gap-1.5 pt-1.5 border-t border-purple-200/60 dark:border-purple-800/60 flex-wrap"><span class="text-[10px] text-purple-600 dark:text-purple-300 font-semibold">Models:</span> ${modelPills}</div>` : ''}
+        `;
+      }
+
+      if (llmSpans.length === 0) {
+        container.innerHTML = `<div class="text-xs text-slate-400 italic py-4">No LLM or Tool calls detected in this trace.</div>`;
+        return;
+      }
+
+      container.innerHTML = llmSpans.map(s => {
+        const isLlm = s.span_type === 'llm';
+        const usage = s.metadata && s.metadata.usage ? s.metadata.usage : null;
+        const modelName = (usage && usage.model) || (s.metadata && s.metadata.model) || (isLlm ? s.name.replace('LLM: ', '').replace('Chat: ', '') : null);
+        const cost = usage && usage.total_cost != null ? usage.total_cost : null;
+
+        const modelBadge = modelName ? `<span class="px-2 py-0.5 text-[10px] bg-purple-100 text-purple-800 border border-purple-200 rounded-full font-mono font-bold dark:bg-purple-900 dark:text-purple-200">${modelName}</span>` : '';
+        const usageBadge = usage ? `<span class="px-2 py-0.5 text-[10px] bg-amber-100 text-amber-800 rounded-full font-mono dark:bg-amber-950 dark:text-amber-300">${usage.total_tokens ?? 0} toks (${usage.prompt_tokens ?? 0} in / ${usage.completion_tokens ?? 0} out)</span>` : '';
+        const costBadge = (cost != null && cost > 0) ? `<span class="px-2 py-0.5 text-[10px] bg-emerald-100 text-emerald-800 rounded-full font-mono font-bold border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300">$${cost < 0.01 ? cost.toFixed(5) : cost.toFixed(4)}</span>` : '';
+
+        return `
+          <div class="bg-purple-50/40 dark:bg-purple-950/40 p-3.5 rounded-2xl border border-purple-100 dark:border-purple-900/60 space-y-2.5 shadow-xs">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center space-x-2 flex-wrap gap-1.5">
+                <span class="px-2.5 py-0.5 rounded-full ${isLlm ? 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950 dark:text-amber-300' : 'bg-fuchsia-100 text-fuchsia-800 border border-fuchsia-200 dark:bg-fuchsia-950 dark:text-fuchsia-300'} text-[10px] font-bold uppercase">${s.span_type}</span>
+                <span class="text-xs font-bold text-slate-900 dark:text-white">${s.name}</span>
+                ${modelBadge}
+                ${usageBadge}
+                ${costBadge}
+              </div>
+              <span class="text-xs mono text-purple-700 dark:text-purple-300 font-bold">${s.duration_ms ?? 0}ms</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+              <div class="bg-slate-50 dark:bg-[#0f172a] p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80">
+                <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Prompt / Input</div>
+                <pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-36 leading-relaxed">${syntaxHighlightJson(s.inputs)}</pre>
+              </div>
+              <div class="bg-slate-50 dark:bg-[#0f172a] p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80">
+                <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Output / Generation</div>
+                <pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-36 leading-relaxed">${syntaxHighlightJson(s.outputs)}</pre>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderRawJson(t) {
+      const el = document.getElementById('rawJsonViewer');
+      if (el) el.innerHTML = syntaxHighlightJson(t);
+    }
+
+    function renderEvals(t) {
+      const container = document.getElementById('evalsList');
+      const badge = document.getElementById('tabEvalsBadge');
+      const evals = [];
+      if (t.metadata && Array.isArray(t.metadata.evals)) {
+        evals.push(...t.metadata.evals);
+      }
+      (t.spans || []).forEach(s => {
+        if (s.span_type === 'eval') {
+          const meta = (s.metadata && s.metadata.eval) || {
+            name: s.name.replace(/^Eval:\s*/, ''),
+            score: s.outputs ? s.outputs.score : (s.inputs ? s.inputs.score : 0),
+            passed: s.status === 'completed',
+            reason: s.outputs ? s.outputs.reason : (s.inputs ? s.inputs.reason : null),
+            timestamp: s.start_time
+          };
+          if (!evals.some(e => e.name === meta.name)) {
+            evals.push(meta);
+          }
+        }
+      });
+
+      if (badge) {
+        if (evals.length > 0) {
+          badge.innerText = evals.length;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      }
+
+      if (!container) return;
+
+      if (evals.length === 0) {
+        container.innerHTML = `
+          <div class="p-8 text-center text-slate-400 dark:text-purple-400 space-y-2">
+            <svg class="w-8 h-8 mx-auto text-purple-300 dark:text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p class="text-xs font-semibold">No evaluations recorded for this trace</p>
+            <p class="text-[11px] text-slate-400 dark:text-purple-400">Use <code class="mono text-purple-600 dark:text-purple-300">record_eval(name, score, passed, reason)</code> in your application code to track continuous evaluation benchmarks.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="space-y-3">
+          <div class="flex items-center justify-between pb-2 border-b border-purple-100 dark:border-purple-900/40">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-xs text-slate-800 dark:text-white">Trace Evaluation Results</span>
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 font-semibold">${evals.length} evaluation${evals.length === 1 ? '' : 's'}</span>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 gap-2.5">
+            ${evals.map(e => {
+              const isPass = !!e.passed;
+              const statusClass = isPass 
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' 
+                : 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800';
+              const scorePercent = Math.max(0, Math.min(100, Math.round((e.score != null ? Number(e.score) : 0) * 100)));
+              const barBg = isPass ? 'bg-emerald-500' : 'bg-rose-500';
+
+              return `
+                <div class="glass-card rounded-xl p-3.5 border border-purple-100 dark:border-purple-900/50 flex flex-col gap-2 shadow-xs">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                      <span class="font-bold text-xs text-slate-900 dark:text-white">${e.name}</span>
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${statusClass}">
+                        ${isPass ? '✓ Passed' : '✕ Failed'}
+                      </span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                      <span class="text-xs font-mono font-bold text-slate-700 dark:text-purple-200">${e.score != null ? Number(e.score).toFixed(2) : '-'}</span>
+                      ${e.timestamp ? `<span class="text-[10px] text-slate-400">${new Date(e.timestamp).toLocaleTimeString()}</span>` : ''}
+                    </div>
+                  </div>
+                  <div class="w-full bg-purple-100/60 dark:bg-purple-950/80 rounded-full h-1.5 overflow-hidden">
+                    <div class="${barBg} h-1.5 rounded-full transition-all duration-300" style="width: ${scorePercent}%"></div>
+                  </div>
+                  ${e.reason ? `<div class="text-xs text-slate-600 dark:text-purple-300 bg-purple-50/50 dark:bg-purple-950/40 p-2 rounded-lg border border-purple-100 dark:border-purple-900/40 font-mono text-[11px] leading-relaxed">${e.reason}</div>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // Side-by-Side Trace Comparison
+    let compareTraceDataA = null;
+    let compareTraceDataB = null;
+
+    function openCompareModal(traceAId = null, traceBId = null) {
+      const modal = document.getElementById('comparisonModal');
+      const selectA = document.getElementById('compareSelectA');
+      const selectB = document.getElementById('compareSelectB');
+      if (!modal || !selectA || !selectB) return;
+
+      const optionsHtml = currentTraces.map(t => {
+        const timeStr = new Date(t.start_time).toLocaleTimeString();
+        return `<option value="${t.id}">${t.name} (${t.id.slice(0, 8)}... - ${t.duration_ms || 0}ms - ${timeStr})</option>`;
+      }).join('');
+
+      selectA.innerHTML = optionsHtml;
+      selectB.innerHTML = optionsHtml;
+
+      const targetA = traceAId || selectedTraceId || (currentTraces[0] ? currentTraces[0].id : null);
+      let targetB = traceBId;
+      if (!targetB) {
+        const other = currentTraces.find(t => t.id !== targetA);
+        targetB = other ? other.id : targetA;
+      }
+
+      if (targetA) selectA.value = targetA;
+      if (targetB) selectB.value = targetB;
+
+      modal.classList.remove('hidden');
+      if (targetA && targetB) {
+        loadComparison(targetA, targetB);
+      }
+    }
+
+    function closeComparisonModal() {
+      const modal = document.getElementById('comparisonModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    async function onCompareSelectChange() {
+      const selectA = document.getElementById('compareSelectA');
+      const selectB = document.getElementById('compareSelectB');
+      if (!selectA || !selectB) return;
+      loadComparison(selectA.value, selectB.value);
+    }
+
+    async function loadComparison(idA, idB) {
+      const container = document.getElementById('compareBody');
+      if (!container) return;
+      container.innerHTML = `<div class="p-12 text-center text-sm text-purple-600 dark:text-purple-300">Loading trace comparison...</div>`;
+
+      try {
+        const [resA, resB] = await Promise.all([
+          apiFetch(`${BASE_PATH}/api/traces/${idA}`),
+          apiFetch(`${BASE_PATH}/api/traces/${idB}`)
+        ]);
+        if (!resA.ok || !resB.ok) {
+          container.innerHTML = `<div class="p-8 text-center text-rose-600 text-xs">Failed to load one or both traces.</div>`;
+          return;
+        }
+        compareTraceDataA = await resA.json();
+        compareTraceDataB = await resB.json();
+        renderComparison(compareTraceDataA, compareTraceDataB);
+      } catch (err) {
+        container.innerHTML = `<div class="p-8 text-center text-rose-600 text-xs">Comparison error: ${err.message}</div>`;
+      }
+    }
+
+    function renderComparison(a, b) {
+      const container = document.getElementById('compareBody');
+      if (!container) return;
+
+      const durA = a.duration_ms ?? 0;
+      const durB = b.duration_ms ?? 0;
+      const durDiff = Math.round((durB - durA) * 100) / 100;
+      const durPct = durA > 0 ? Math.round(((durB - durA) / durA) * 100) : 0;
+      const durDeltaBadge = durDiff === 0 ? '' : (
+        durDiff < 0 
+          ? `<span class="text-xs font-bold text-emerald-600 dark:text-emerald-400">(${Math.abs(durDiff)}ms faster, ${Math.abs(durPct)}% ↓)</span>`
+          : `<span class="text-xs font-bold text-rose-600 dark:text-rose-400">(+${durDiff}ms slower, +${durPct}% ↑)</span>`
+      );
+
+      const costA = a.estimated_cost ?? 0;
+      const costB = b.estimated_cost ?? 0;
+      const costDiff = Math.round((costB - costA) * 10000) / 10000;
+      const costDeltaBadge = costDiff === 0 ? '' : (
+        costDiff < 0
+          ? `<span class="text-xs font-bold text-emerald-600 dark:text-emerald-400">(\$${Math.abs(costDiff).toFixed(4)} cheaper)</span>`
+          : `<span class="text-xs font-bold text-rose-600 dark:text-rose-400">(+\$${costDiff.toFixed(4)})</span>`
+      );
+
+      const tokA = a.llm_metrics?.total_tokens ?? 0;
+      const tokB = b.llm_metrics?.total_tokens ?? 0;
+      const tokDiff = tokB - tokA;
+      const tokDeltaBadge = tokDiff === 0 ? '' : (
+        tokDiff < 0
+          ? `<span class="text-xs font-bold text-emerald-600 dark:text-emerald-400">(${Math.abs(tokDiff).toLocaleString()} fewer)</span>`
+          : `<span class="text-xs font-bold text-rose-600 dark:text-rose-400">(+${tokDiff.toLocaleString()} toks)</span>`
+      );
+
+      const spansA = a.spans || [];
+      const spansB = b.spans || [];
+
+      const maxSpans = Math.max(spansA.length, spansB.length);
+      let spansTableRows = '';
+      for (let i = 0; i < maxSpans; i++) {
+        const sa = spansA[i];
+        const sb = spansB[i];
+
+        const saHtml = sa ? `
+          <div class="p-2 rounded-xl border border-purple-100 dark:border-purple-900/60 bg-purple-50/40 dark:bg-purple-950/30 flex items-center justify-between text-xs">
+            <div class="flex items-center space-x-2 truncate">
+              <span class="w-2 h-2 rounded-full ${sa.status === 'completed' ? 'bg-emerald-500' : 'bg-rose-500'}"></span>
+              <span class="font-bold text-slate-800 dark:text-slate-100 truncate">${sa.name}</span>
+              <span class="text-[10px] text-purple-600 dark:text-purple-400 font-mono">[${sa.span_type}]</span>
+            </div>
+            <span class="font-mono text-xs font-bold text-purple-700 dark:text-purple-300 shrink-0 ml-2">${sa.duration_ms ?? 0}ms</span>
+          </div>
+        ` : `<div class="p-2 text-xs text-slate-400 italic">No corresponding span</div>`;
+
+        const sbHtml = sb ? `
+          <div class="p-2 rounded-xl border border-purple-100 dark:border-purple-900/60 bg-purple-50/40 dark:bg-purple-950/30 flex items-center justify-between text-xs">
+            <div class="flex items-center space-x-2 truncate">
+              <span class="w-2 h-2 rounded-full ${sb.status === 'completed' ? 'bg-emerald-500' : 'bg-rose-500'}"></span>
+              <span class="font-bold text-slate-800 dark:text-slate-100 truncate">${sb.name}</span>
+              <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">[${sb.span_type}]</span>
+            </div>
+            <span class="font-mono text-xs font-bold text-indigo-700 dark:text-indigo-300 shrink-0 ml-2">${sb.duration_ms ?? 0}ms</span>
+          </div>
+        ` : `<div class="p-2 text-xs text-slate-400 italic">No corresponding span</div>`;
+
+        spansTableRows += `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>${saHtml}</div>
+            <div>${sbHtml}</div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = `
+        <!-- High Level Metrics Comparison Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <!-- Latency -->
+          <div class="glass-card rounded-2xl p-3.5 flex flex-col justify-between shadow-xs">
+            <span class="text-[10px] font-bold text-slate-500 dark:text-purple-300 uppercase tracking-wider">Execution Latency</span>
+            <div class="flex items-baseline justify-between mt-1">
+              <div class="text-xs space-y-0.5">
+                <div><span class="text-purple-600 font-bold">A:</span> <span class="mono font-bold">${durA} ms</span></div>
+                <div><span class="text-indigo-600 font-bold">B:</span> <span class="mono font-bold">${durB} ms</span></div>
+              </div>
+              <div>${durDeltaBadge}</div>
+            </div>
+          </div>
+
+          <!-- Cost -->
+          <div class="glass-card rounded-2xl p-3.5 flex flex-col justify-between shadow-xs">
+            <span class="text-[10px] font-bold text-slate-500 dark:text-purple-300 uppercase tracking-wider">Estimated Cost</span>
+            <div class="flex items-baseline justify-between mt-1">
+              <div class="text-xs space-y-0.5">
+                <div><span class="text-purple-600 font-bold">A:</span> <span class="mono font-bold">\$${costA.toFixed(4)}</span></div>
+                <div><span class="text-indigo-600 font-bold">B:</span> <span class="mono font-bold">\$${costB.toFixed(4)}</span></div>
+              </div>
+              <div>${costDeltaBadge}</div>
+            </div>
+          </div>
+
+          <!-- Tokens -->
+          <div class="glass-card rounded-2xl p-3.5 flex flex-col justify-between shadow-xs">
+            <span class="text-[10px] font-bold text-slate-500 dark:text-purple-300 uppercase tracking-wider">Total Tokens</span>
+            <div class="flex items-baseline justify-between mt-1">
+              <div class="text-xs space-y-0.5">
+                <div><span class="text-purple-600 font-bold">A:</span> <span class="mono font-bold">${tokA.toLocaleString()}</span></div>
+                <div><span class="text-indigo-600 font-bold">B:</span> <span class="mono font-bold">${tokB.toLocaleString()}</span></div>
+              </div>
+              <div>${tokDeltaBadge}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Spans Sequence Comparison -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between border-b border-purple-100 dark:border-purple-900 pb-1 text-xs font-bold">
+            <span class="text-purple-700 dark:text-purple-300">Trace A Spans (${spansA.length})</span>
+            <span class="text-indigo-700 dark:text-indigo-300">Trace B Spans (${spansB.length})</span>
+          </div>
+          <div class="space-y-2 max-h-60 overflow-y-auto pr-1">
+            ${spansTableRows}
+          </div>
+        </div>
+
+        <!-- Side-by-Side Outputs & Inputs Diff -->
+        <div class="space-y-3">
+          <div class="text-xs font-bold text-slate-800 dark:text-white border-b border-purple-100 dark:border-purple-900 pb-1">
+            Outputs & Payload Comparison
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Trace A Output -->
+            <div class="bg-slate-50 dark:bg-[#0f172a] p-3 rounded-2xl border border-purple-100 dark:border-purple-900/60 space-y-1.5">
+              <div class="flex items-center justify-between text-[11px] font-bold text-purple-700 dark:text-purple-300">
+                <span>Trace A Output</span>
+                <span class="mono text-[10px] text-slate-400">${a.id.slice(0, 8)}</span>
+              </div>
+              <pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-56 leading-relaxed select-text">${syntaxHighlightJson(a.output)}</pre>
+            </div>
+
+            <!-- Trace B Output -->
+            <div class="bg-slate-50 dark:bg-[#0f172a] p-3 rounded-2xl border border-purple-100 dark:border-purple-900/60 space-y-1.5">
+              <div class="flex items-center justify-between text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
+                <span>Trace B Output</span>
+                <span class="mono text-[10px] text-slate-400">${b.id.slice(0, 8)}</span>
+              </div>
+              <pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-56 leading-relaxed select-text">${syntaxHighlightJson(b.output)}</pre>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    let currentZoom = 1.0;
+    function zoomDag(delta) {
+      currentZoom = Math.min(2.5, Math.max(0.4, currentZoom + delta));
+      const el = document.getElementById('dagContainer');
+      if (el) el.style.transform = `scale(${currentZoom})`;
+    }
+    function resetDagZoom() {
+      currentZoom = 1.0;
+      const el = document.getElementById('dagContainer');
+      if (el) el.style.transform = 'scale(1)';
+    }
+
+    function closeDagDrawer() {
+      const drawer = document.getElementById('dagNodeDrawer');
+      if (drawer) drawer.classList.add('hidden');
+    }
+
+    function openDagNodeDrawer(nodeName) {
+      if (!currentTraceData) return;
+      const drawer = document.getElementById('dagNodeDrawer');
+      const nameEl = document.getElementById('drawerNodeName');
+      const statusEl = document.getElementById('drawerNodeStatus');
+      const durEl = document.getElementById('drawerNodeDuration');
+      const contentEl = document.getElementById('drawerNodeContent');
+
+      const span = (currentTraceData.spans || []).find(s => s.span_type === 'node' && s.name === nodeName);
+      if (!span) {
+        nameEl.innerText = nodeName;
+        statusEl.innerText = "UNEXECUTED";
+        statusEl.className = "text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200";
+        durEl.innerText = "-";
+        contentEl.innerHTML = `<div class="text-xs text-slate-500 italic py-2">This node was not reached during this execution run (e.g. conditional branch not taken).</div>`;
+        drawer.classList.remove('hidden');
+        return;
+      }
+
+      nameEl.innerText = span.name;
+      statusEl.innerText = span.status;
+      const isOk = span.status === 'completed';
+      statusEl.className = `text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase ${
+        isOk ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300'
+      }`;
+      durEl.innerText = `${span.duration_ms ?? 0} ms`;
+
+      const hasDiff = span.state_diff && Object.keys(span.state_diff).length > 0;
+      let diffHtml = '';
+      if (hasDiff) {
+        const diffEntries = Object.entries(span.state_diff).map(([k, d]) => {
+          let badge = `<span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold uppercase">Added</span>`;
+          let valHtml = `<pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-28 leading-relaxed">${syntaxHighlightJson(d.new)}</pre>`;
+          if (d.action === 'modified') {
+            badge = `<span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold uppercase">Modified</span>`;
+            valHtml = `
+              <div class="space-y-1">
+                <div class="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Before:</div>
+                <pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-24 leading-relaxed">${syntaxHighlightJson(d.old)}</pre>
+                <div class="text-[10px] text-slate-400 dark:text-slate-500 font-medium">After:</div>
+                <pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-24 leading-relaxed">${syntaxHighlightJson(d.new)}</pre>
+              </div>
+            `;
+          } else if (d.action === 'appended') {
+            badge = `<span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-bold uppercase">Appended (${d.count})</span>`;
+            valHtml = `<pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-28 leading-relaxed">${syntaxHighlightJson(d.items)}</pre>`;
+          }
+          return `
+            <div class="bg-slate-50 dark:bg-[#0f172a] p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+              <div class="flex items-center justify-between mb-1">
+                <strong class="text-sky-700 dark:text-sky-400 mono">${k}</strong>
+                ${badge}
+              </div>
+              ${valHtml}
+            </div>
+          `;
+        }).join('');
+        diffHtml = `
+          <div class="mt-2.5 space-y-1.5">
+            <div class="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">State Changes (Diff)</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${diffEntries}</div>
+          </div>
+        `;
+      }
+
+      contentEl.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+          <div class="bg-slate-50 dark:bg-[#0f172a] p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Node Input</div>
+            <pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-32 leading-relaxed">${syntaxHighlightJson(span.inputs)}</pre>
+          </div>
+          <div class="bg-slate-50 dark:bg-[#0f172a] p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Node Output</div>
+            <pre class="mono text-[11px] text-slate-800 dark:text-slate-200 overflow-x-auto max-h-32 leading-relaxed">${syntaxHighlightJson(span.outputs)}</pre>
+          </div>
+        </div>
+        ${diffHtml}
+      `;
+
+      drawer.classList.remove('hidden');
+    }
+
+    window.onMermaidNodeClick = function(nodeId) {
+      openDagNodeDrawer(nodeId);
+    };
+
+    function renderOfflineDag(container, nodes, edges, executedMap, isDark) {
+      let html = `
+        <div class="w-full flex flex-col items-center space-y-4 py-4">
+          <div class="px-3 py-1 rounded-full bg-purple-100/80 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 text-[11px] font-medium border border-purple-200/80 dark:border-purple-800/80 flex items-center gap-1.5 shadow-xs">
+            <span class="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+            <span>Offline Topology Flow (Mermaid CDN Unreachable)</span>
+          </div>
+          <div class="flex flex-wrap items-center justify-center gap-2 max-w-full">
+      `;
+
+      nodes.forEach((n, idx) => {
+        const isStart = n.id === '__start__' || n.id === 'START';
+        const isEnd = n.id === '__end__' || n.id === 'END';
+        const exec = executedMap[n.id] || executedMap[n.name];
+
+        let borderCol = 'border-purple-300 dark:border-purple-700';
+        let bgCol = 'bg-purple-50/60 dark:bg-purple-950/40';
+        let statusText = 'untraversed';
+        let badgeBg = 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+
+        if (isStart) {
+          bgCol = 'bg-indigo-50 dark:bg-indigo-950/60';
+          borderCol = 'border-indigo-300 dark:border-indigo-700';
+          statusText = 'Start';
+          badgeBg = 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200';
+        } else if (isEnd) {
+          bgCol = 'bg-purple-50 dark:bg-purple-950/60';
+          borderCol = 'border-purple-300 dark:border-purple-700';
+          statusText = 'End';
+          badgeBg = 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200';
+        } else if (exec) {
+          const durText = exec.duration_ms != null ? `${exec.duration_ms}ms` : '';
+          if (exec.status === 'completed') {
+            borderCol = 'border-emerald-400 dark:border-emerald-600';
+            bgCol = 'bg-emerald-50/70 dark:bg-emerald-950/40';
+            statusText = `✓ ${durText}`;
+            badgeBg = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200';
+          } else if (exec.status === 'failed') {
+            borderCol = 'border-rose-400 dark:border-rose-600';
+            bgCol = 'bg-rose-50/70 dark:bg-rose-950/40';
+            statusText = '✕ Failed';
+            badgeBg = 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200';
+          } else {
+            borderCol = 'border-amber-400 dark:border-amber-600';
+            bgCol = 'bg-amber-50/70 dark:bg-amber-950/40';
+            statusText = '⚡ Running';
+            badgeBg = 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
+          }
+        }
+
+        const clickable = !isStart && !isEnd;
+        html += `
+          <div ${clickable ? `onclick="openDagNodeDrawer('${n.id}')"` : ''} class="${clickable ? 'cursor-pointer hover:shadow-md hover:scale-105' : ''} transition-all border-2 ${borderCol} ${bgCol} rounded-xl px-3 py-2 flex flex-col items-center min-w-[100px] text-center shadow-xs">
+            <span class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate max-w-[130px]">${isStart ? '▶ START' : (isEnd ? '🏁 END' : n.name)}</span>
+            <span class="mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${badgeBg}">${statusText}</span>
+          </div>
+        `;
+
+        if (idx < nodes.length - 1) {
+          html += `
+            <div class="text-purple-400 dark:text-purple-600 font-bold text-sm px-0.5">→</div>
+          `;
+        }
+      });
+
+      html += `
+          </div>
+        </div>
+      `;
+      container.innerHTML = html;
+    }
+
+    async function renderDagGraph(t) {
+      const container = document.getElementById('dagContainer');
+      if (!container || !t) return;
+
+      const isDark = document.documentElement.classList.contains('dark');
+
+      const spans = t.spans || [];
+      const nodeSpans = spans.filter(s => s.span_type === 'node');
+      const topology = t.graph_topology || (t.metadata && t.metadata.graph_topology);
+
+      let nodes = [];
+      let edges = [];
+
+      if (topology && topology.nodes && topology.nodes.length > 0) {
+        nodes = topology.nodes;
+        edges = topology.edges || [];
+      } else {
+        const nodeNames = nodeSpans.map(s => s.name);
+        nodes = [{ id: '__start__', name: '__start__' }];
+        nodeNames.forEach(name => nodes.push({ id: name, name: name }));
+        nodes.push({ id: '__end__', name: '__end__' });
+
+        if (nodeNames.length > 0) {
+          edges.push({ source: '__start__', target: nodeNames[0], conditional: false });
+          for (let i = 0; i < nodeNames.length - 1; i++) {
+            edges.push({ source: nodeNames[i], target: nodeNames[i + 1], conditional: false });
+          }
+          edges.push({ source: nodeNames[nodeNames.length - 1], target: '__end__', conditional: false });
+        } else {
+          edges.push({ source: '__start__', target: '__end__', conditional: false });
+        }
+      }
+
+      const executedMap = {};
+      nodeSpans.forEach(s => {
+        executedMap[s.name] = s;
+      });
+
+      if (!window.mermaid) {
+        renderOfflineDag(container, nodes, edges, executedMap, isDark);
+        return;
+      }
+
+      if (!window._mermaidSvgCache) {
+        window._mermaidSvgCache = new Map();
+      }
+
+      if (window._lastMermaidTheme !== isDark) {
+        try {
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: isDark ? 'dark' : 'default',
+            securityLevel: 'loose',
+            themeVariables: isDark ? {
+              darkMode: true,
+              background: '#150d24',
+              primaryColor: '#2e1065',
+              primaryTextColor: '#f3e8ff',
+              primaryBorderColor: '#7e22ce',
+              lineColor: '#a855f7',
+              secondaryColor: '#1e1b4b',
+              tertiaryColor: '#2e1065'
+            } : {
+              darkMode: false,
+              background: '#faf5ff',
+              primaryColor: '#f3e8ff',
+              primaryTextColor: '#3b0764',
+              primaryBorderColor: '#c084fc',
+              lineColor: '#9333ea',
+              secondaryColor: '#ede9fe',
+              tertiaryColor: '#f5f3ff'
+            },
+            flowchart: {
+              curve: 'basis',
+              nodeSpacing: 40,
+              rankSpacing: 45,
+              htmlLabels: true
+            }
+          });
+          window._lastMermaidTheme = isDark;
+        } catch (e) {}
+      }
+
+      const cleanId = id => 'node_' + String(id).replace(/[^a-zA-Z0-9_]/g, '_');
+
+      let mm = 'flowchart LR\n';
+
+      nodes.forEach(n => {
+        const cid = cleanId(n.id);
+        const isStart = n.id === '__start__' || n.id === 'START';
+        const isEnd = n.id === '__end__' || n.id === 'END';
+
+        if (isStart) {
+          mm += `  ${cid}(["▶ START"]):::startNode\n`;
+        } else if (isEnd) {
+          mm += `  ${cid}(["🏁 END"]):::endNode\n`;
+        } else {
+          const exec = executedMap[n.id] || executedMap[n.name];
+          if (exec) {
+            const dur = exec.duration_ms != null ? `${exec.duration_ms}ms` : '';
+            if (exec.status === 'completed') {
+              mm += `  ${cid}["<b>${n.name}</b><br/><small style='color:#059669;font-weight:bold'>✓ ${dur}</small>"]:::completedNode\n`;
+            } else if (exec.status === 'failed') {
+              mm += `  ${cid}["<b>${n.name}</b><br/><small style='color:#e11d48;font-weight:bold'>FAILED</small>"]:::failedNode\n`;
+            } else {
+              mm += `  ${cid}["<b>${n.name}</b><br/><small style='color:#d97706;font-weight:bold'>RUNNING</small>"]:::runningNode\n`;
+            }
+          } else {
+            mm += `  ${cid}["${n.name}<br/><small style='color:#94a3b8'>untraversed</small>"]:::skippedNode\n`;
+          }
+        }
+      });
+
+      edges.forEach(e => {
+        const src = cleanId(e.source);
+        const dst = cleanId(e.target);
+        const isSrcExecuted = e.source === '__start__' || e.source === 'START' || !!executedMap[e.source];
+        const isDstExecuted = e.target === '__end__' || e.target === 'END' || !!executedMap[e.target];
+        const isTraversed = isSrcExecuted && isDstExecuted;
+
+        const label = e.data ? `|${e.data}|` : '';
+
+        if (isTraversed) {
+          mm += `  ${src} ==${label}==> ${dst}\n`;
+        } else {
+          mm += `  ${src} -.${label}.-> ${dst}\n`;
+        }
+      });
+
+      if (isDark) {
+        mm += `
+  classDef startNode fill:#2e1065,stroke:#818cf8,stroke-width:2px,color:#e0e7ff;
+  classDef endNode fill:#2e1065,stroke:#c084fc,stroke-width:2px,color:#f3e8ff;
+  classDef completedNode fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#ecfdf5;
+  classDef failedNode fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#fef2f2;
+  classDef runningNode fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#fffbeb;
+  classDef skippedNode fill:#1f1338,stroke:#4c1d95,stroke-width:1px,stroke-dasharray: 4 4,color:#8b5cf6;
+`;
+      } else {
+        mm += `
+  classDef startNode fill:#f5f3ff,stroke:#6366f1,stroke-width:2px,color:#4338ca;
+  classDef endNode fill:#faf5ff,stroke:#9333ea,stroke-width:2px,color:#6b21a8;
+  classDef completedNode fill:#ecfdf5,stroke:#10b981,stroke-width:2px,color:#065f46;
+  classDef failedNode fill:#fff1f2,stroke:#f43f5e,stroke-width:2px,color:#9f1239;
+  classDef runningNode fill:#fffbeb,stroke:#f59e0b,stroke-width:2px,color:#92400e;
+  classDef skippedNode fill:#faf5ff,stroke:#cbd5e1,stroke-width:1px,stroke-dasharray: 4 4,color:#94a3b8;
+`;
+      }
+
+      nodes.forEach(n => {
+        if (n.id !== '__start__' && n.id !== 'START' && n.id !== '__end__' && n.id !== 'END') {
+          const cid = cleanId(n.id);
+          mm += `  click ${cid} call onMermaidNodeClick("${n.id}") "Click to inspect node"\n`;
+        }
+      });
+
+      const attachNodeClicks = (svgEl) => {
+        nodes.forEach(n => {
+          if (n.id !== '__start__' && n.id !== 'START' && n.id !== '__end__' && n.id !== 'END') {
+            const cid = cleanId(n.id);
+            const nodeG = svgEl.querySelector(`#${cid}, [id*="${cid}"]`);
+            if (nodeG) {
+              nodeG.style.cursor = 'pointer';
+              nodeG.addEventListener('click', () => openDagNodeDrawer(n.id));
+            }
+          }
+        });
+      };
+
+      const cacheKey = `${isDark ? 'd' : 'l'}::${mm}`;
+      if (window._mermaidSvgCache.has(cacheKey)) {
+        container.innerHTML = window._mermaidSvgCache.get(cacheKey);
+        const svgEl = container.querySelector('svg');
+        if (svgEl) {
+          svgEl.style.maxWidth = '100%';
+          svgEl.style.height = 'auto';
+          svgEl.classList.add('select-none');
+          attachNodeClicks(svgEl);
+        }
+        return;
+      }
+
+      try {
+        const renderId = `dag_svg_${Date.now()}`;
+        const { svg } = await mermaid.render(renderId, mm);
+        window._mermaidSvgCache.set(cacheKey, svg);
+        if (window._mermaidSvgCache.size > 80) {
+          const oldestKey = window._mermaidSvgCache.keys().next().value;
+          window._mermaidSvgCache.delete(oldestKey);
+        }
+
+        container.innerHTML = svg;
+
+        const svgEl = container.querySelector('svg');
+        if (svgEl) {
+          svgEl.style.maxWidth = '100%';
+          svgEl.style.height = 'auto';
+          svgEl.classList.add('select-none');
+          attachNodeClicks(svgEl);
+        }
+      } catch (err) {
+        console.warn("Mermaid DAG render failed, falling back to offline topology renderer:", err);
+        renderOfflineDag(container, nodes, edges, executedMap, isDark);
+      }
+
+    }
+
+    function switchTab(tab) {
+      activeTab = tab;
+      const tabs = ['dag', 'waterfall', 'nodes', 'llm', 'evals', 'raw'];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        const content = document.getElementById(`tabContent${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        if (t === tab) {
+          btn.className = "px-3 py-1.5 rounded-lg text-white bg-purple-600 shadow-xs transition flex items-center gap-1.5 font-semibold";
+          content.classList.remove('hidden');
+        } else {
+          btn.className = "px-3 py-1.5 rounded-lg text-slate-600 dark:text-purple-300 hover:text-purple-900 dark:hover:text-white transition flex items-center gap-1.5 font-medium";
+          content.classList.add('hidden');
+        }
+      });
+      if (tab === 'dag' && currentTraceData) {
+        renderDagGraph(currentTraceData);
+      }
+    }
+
+    function handleSearch() {
+      const searchVal = document.getElementById('searchInput').value;
+      const clearBtn = document.getElementById('clearSearchBtn');
+      if (searchVal) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => {
+        fetchTraces();
+      }, 250);
+    }
+
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('clearSearchBtn').classList.add('hidden');
+      fetchTraces();
+    }
+
+    function changeRefreshInterval(val) {
+      refreshIntervalMs = parseInt(val, 10);
+      const label = document.getElementById('refreshLabel');
+      label.innerText = `Auto: ${refreshIntervalMs / 1000}s`;
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = setInterval(refreshCycle, refreshIntervalMs);
+      }
+    }
+
+    function refreshCycle() {
+      if (document.hidden) return; // Pause polling when tab is not visible
+      fetchDashboard(currentPage, true);
+      if (selectedTraceId) {
+        // If current trace is already finalized (completed or failed), skip re-rendering to prevent losing scroll position and tab view
+        if (currentTraceData && (currentTraceData.status === 'completed' || currentTraceData.status === 'failed')) {
+          return;
+        }
+        apiFetch(`${BASE_PATH}/api/traces/${selectedTraceId}`)
+          .then(res => res.ok ? res.json() : null)
+          .then(t => {
+            if (!t) return;
+            currentTraceData = t;
+            // Update header status and duration smoothly
+            const nameEl = document.getElementById('detailTraceName');
+            if (nameEl) nameEl.innerText = t.name;
+            const durEl = document.getElementById('detailDuration');
+            if (durEl) durEl.innerText = t.duration_ms != null ? `${t.duration_ms} ms` : 'Running...';
+            const badge = document.getElementById('detailStatusBadge');
+            if (badge) {
+              badge.innerText = t.status;
+              const isSuccess = t.status === 'completed';
+              badge.className = `px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                isSuccess ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300'
+              }`;
+            }
+            if (t.status === 'completed' || t.status === 'failed') {
+              renderTraceDetail(t);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+
+    // Page Visibility API - Suspend/Resume Polling on Hidden/Visible Tab
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        if (autoRefreshInterval) {
+          refreshCycle();
+        }
+      }
+    });
+
+    function toggleAutoRefresh() {
+      const btn = document.getElementById('autoRefreshBtn');
+      const label = document.getElementById('refreshLabel');
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+        label.innerText = 'Auto: OFF';
+        btn.classList.add('opacity-60');
+      } else {
+        autoRefreshInterval = setInterval(refreshCycle, refreshIntervalMs);
+        label.innerText = `Auto: ${refreshIntervalMs / 1000}s`;
+        btn.classList.remove('opacity-60');
+      }
+    }
+
+
+    async function clearHistory() {
+      if (!confirm("Are you sure you want to clear all trace history?")) return;
+      try {
+        await apiFetch(`${BASE_PATH}/api/traces`, { method: 'DELETE' });
+        selectedTraceId = null;
+        currentTraceData = null;
+        document.getElementById('emptyDetailState').classList.remove('hidden');
+        document.getElementById('activeDetailContent').classList.add('hidden');
+        fetchDashboard(1);
+        showToast("Trace history cleared", "info");
+      } catch (e) {
+        console.error("Failed to clear traces", e);
+      }
+    }
+
+    function copyDetailTraceId() {
+      if (selectedTraceId) {
+        navigator.clipboard.writeText(selectedTraceId);
+        showToast("Trace ID copied to clipboard!", "success");
+      }
+    }
+
+    function copyRawJson() {
+      if (currentTraceData) {
+        navigator.clipboard.writeText(JSON.stringify(currentTraceData, null, 2));
+        showToast("Trace JSON copied to clipboard!", "success");
+      }
+    }
+
+    function downloadTraceJson() {
+      if (!currentTraceData) return;
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentTraceData, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `trace_${currentTraceData.id}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    // --- Time-Series Performance Trends (Class 1 & 4 Watch) ---
+    let currentTrendsWindow = '24h';
+    let isTrendsOpen = false;
+
+    function toggleTrendsSection() {
+      const panel = document.getElementById('timeseriesPanel');
+      const btn = document.getElementById('trendsToggleBtn');
+      if (!panel) return;
+      isTrendsOpen = !isTrendsOpen;
+      if (isTrendsOpen) {
+        panel.classList.remove('hidden');
+        btn?.classList.add('bg-purple-100', 'dark:bg-purple-900/60', 'text-purple-800', 'border-purple-300');
+        fetchTimeseriesAnalytics();
+      } else {
+        panel.classList.add('hidden');
+        btn?.classList.remove('bg-purple-100', 'dark:bg-purple-900/60', 'text-purple-800', 'border-purple-300');
+      }
+    }
+
+    function changeTrendsWindow(win) {
+      currentTrendsWindow = win;
+      ['1h', '6h', '24h', '7d', '30d'].forEach(w => {
+        const b = document.getElementById(`trendsWin${w}`);
+        if (!b) return;
+        if (w === win) {
+          b.className = "px-2.5 py-1 rounded-lg font-bold transition bg-white dark:bg-purple-800 text-purple-900 dark:text-white shadow-xs";
+        } else {
+          b.className = "px-2.5 py-1 rounded-lg font-medium transition text-slate-600 dark:text-purple-300 hover:text-purple-900";
+        }
+      });
+      fetchTimeseriesAnalytics();
+    }
+
+    async function fetchTimeseriesAnalytics() {
+      const volContainer = document.getElementById('chartVolumeContainer');
+      const latContainer = document.getElementById('chartLatencyContainer');
+      const costContainer = document.getElementById('chartCostContainer');
+      if (volContainer) volContainer.innerHTML = '<div class="text-xs text-slate-400 dark:text-purple-400 italic">Loading trends...</div>';
+
+      try {
+        const envEl = document.getElementById('envFilter');
+        const projEl = document.getElementById('projectFilter');
+        const env = envEl ? envEl.value : '';
+        const proj = projEl ? projEl.value.trim() : '';
+
+        const params = new URLSearchParams();
+        params.set('time_window', currentTrendsWindow);
+        if (env) params.set('environment', env);
+        if (proj) params.set('project', proj);
+
+        const res = await apiFetch(`${BASE_PATH}/api/analytics/timeseries?${params.toString()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        renderTimeseriesCharts(data);
+      } catch (err) {
+        console.error("Failed fetching timeseries analytics:", err);
+        if (volContainer) volContainer.innerHTML = '<div class="text-xs text-rose-500">Failed to load trends data</div>';
+      }
+    }
+
+    function renderTimeseriesCharts(data) {
+      const buckets = data.buckets || [];
+      let totalRequests = 0;
+      let totalErrors = 0;
+      let totalCost = 0;
+      let maxP95 = 0;
+      const modelCounts = {};
+
+      buckets.forEach(b => {
+        totalRequests += (b.total_requests || 0);
+        totalErrors += (b.error_count || 0);
+        totalCost += (b.total_cost || 0);
+        if ((b.p95_duration_ms || 0) > maxP95) maxP95 = b.p95_duration_ms;
+        if (b.models) {
+          Object.entries(b.models).forEach(([m, cnt]) => {
+            modelCounts[m] = (modelCounts[m] || 0) + cnt;
+          });
+        }
+      });
+
+      // Update Badges
+      const reqBadge = document.getElementById('trendsTotalRequestsBadge');
+      if (reqBadge) reqBadge.innerText = `${totalRequests} reqs`;
+
+      const errRate = totalRequests > 0 ? ((totalErrors / totalRequests) * 100).toFixed(1) : '0.0';
+      const errBadge = document.getElementById('trendsErrorRateBadge');
+      if (errBadge) {
+        errBadge.innerText = `${errRate}% err (${totalErrors})`;
+        if (totalErrors > 0) errBadge.classList.add('text-rose-600');
+        else errBadge.classList.remove('text-rose-600');
+      }
+
+      const latBadge = document.getElementById('trendsLatencyBadge');
+      if (latBadge) latBadge.innerText = `P95 Peak: ${maxP95.toFixed(0)}ms`;
+
+      const costBadge = document.getElementById('trendsCostBadge');
+      if (costBadge) costBadge.innerText = totalCost >= 1 ? `$${totalCost.toFixed(2)}` : (totalCost > 0 ? `$${totalCost.toFixed(4)}` : '$0.00');
+
+      // Render Model Distribution Legend / Tags
+      const modelLegend = document.getElementById('trendsModelLegend');
+      if (modelLegend) {
+        const modelEntries = Object.entries(modelCounts);
+        if (modelEntries.length === 0) {
+          modelLegend.innerHTML = '<span class="text-slate-400 italic">No LLM calls recorded</span>';
+        } else {
+          const totalModelCalls = modelEntries.reduce((acc, [, cnt]) => acc + cnt, 0);
+          modelLegend.innerHTML = modelEntries.map(([m, cnt]) => {
+            const pct = totalModelCalls > 0 ? Math.round((cnt / totalModelCalls) * 100) : 0;
+            return `<span class="px-2 py-0.5 rounded-md font-mono text-[10px] bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 border border-purple-200 dark:border-purple-800">${m}: ${pct}% (${cnt})</span>`;
+          }).join('');
+        }
+      }
+
+      const volContainer = document.getElementById('chartVolumeContainer');
+      const latContainer = document.getElementById('chartLatencyContainer');
+      const costContainer = document.getElementById('chartCostContainer');
+
+      if (buckets.length === 0 || totalRequests === 0) {
+        const emptyHtml = '<div class="text-xs text-slate-400 dark:text-purple-400 italic py-8">No activity in this window</div>';
+        if (volContainer) volContainer.innerHTML = emptyHtml;
+        if (latContainer) latContainer.innerHTML = emptyHtml;
+        if (costContainer) costContainer.innerHTML = emptyHtml;
+        return;
+      }
+
+      // 1. Chart 1: Volume Bar Chart (SVG)
+      const maxReq = Math.max(1, ...buckets.map(b => b.total_requests || 0));
+      const chartWidth = 360;
+      const chartHeight = 110;
+      const barPadding = 2;
+      const n = buckets.length;
+      const slotWidth = chartWidth / n;
+      const barWidth = Math.max(2, slotWidth - barPadding);
+
+      let volumeBarsSvg = '';
+      buckets.forEach((b, i) => {
+        const x = i * slotWidth;
+        const totalH = ((b.total_requests || 0) / maxReq) * (chartHeight - 20);
+        const errH = ((b.error_count || 0) / maxReq) * (chartHeight - 20);
+        const succH = Math.max(0, totalH - errH);
+
+        const yTotal = chartHeight - totalH;
+        const yErr = yTotal;
+        const ySucc = yTotal + errH;
+
+        if (b.total_requests > 0) {
+          if (errH > 0) {
+            volumeBarsSvg += `<rect x="${x.toFixed(1)}" y="${yErr.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${errH.toFixed(1)}" fill="#f43f5e" rx="1.5"><title>${b.label}: ${b.error_count} errors (${b.error_rate}%)</title></rect>`;
+          }
+          if (succH > 0) {
+            volumeBarsSvg += `<rect x="${x.toFixed(1)}" y="${ySucc.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${succH.toFixed(1)}" fill="#a855f7" rx="1.5"><title>${b.label}: ${b.success_count} success</title></rect>`;
+          }
+        } else {
+          volumeBarsSvg += `<circle cx="${(x + barWidth / 2).toFixed(1)}" cy="${(chartHeight - 2).toFixed(1)}" r="1" fill="#cbd5e1"/>`;
+        }
+      });
+
+      const firstLabel = buckets[0]?.label || '';
+      const midLabel = buckets[Math.floor(buckets.length / 2)]?.label || '';
+      const lastLabel = buckets[buckets.length - 1]?.label || '';
+
+      if (volContainer) {
+        volContainer.innerHTML = `
+          <svg viewBox="0 0 ${chartWidth} ${chartHeight + 16}" class="w-full h-full overflow-visible">
+            <line x1="0" y1="${chartHeight}" x2="${chartWidth}" y2="${chartHeight}" stroke="#e2e8f0" stroke-width="1"/>
+            ${volumeBarsSvg}
+            <text x="2" y="${chartHeight + 13}" font-size="9" fill="#94a3b8">${firstLabel}</text>
+            <text x="${chartWidth / 2}" y="${chartHeight + 13}" text-anchor="middle" font-size="9" fill="#94a3b8">${midLabel}</text>
+            <text x="${chartWidth - 2}" y="${chartHeight + 13}" text-anchor="end" font-size="9" fill="#94a3b8">${lastLabel}</text>
+          </svg>
+        `;
+      }
+
+      // 2. Chart 2: Latency Curve (P95 vs Avg Line Chart)
+      // Collect all non-zero latency values across both p95 and avg to properly scale the Y-axis
+      const allLatencies = [];
+      buckets.forEach(b => {
+        const p95 = Number(b.p95_duration_ms ?? b.p95_latency_ms ?? 0);
+        const avg = Number(b.avg_duration_ms ?? b.avg_latency_ms ?? 0);
+        if (!isNaN(p95) && p95 > 0) allLatencies.push(p95);
+        if (!isNaN(avg) && avg > 0) allLatencies.push(avg);
+      });
+
+      const maxObservedLatency = allLatencies.length > 0 ? Math.max(...allLatencies) : 0;
+      // Add 25% headroom so the curve and points never touch or exceed the top bounds of the SVG
+      const maxLatency = Math.max(10, maxObservedLatency * 1.25);
+
+      // Define strict vertical boundaries:
+      // topPadding leaves 16px of clearance from the top of the SVG (y=0) to highest possible data point
+      const topPadding = 16;
+      // bottomBaseline positions 0ms points comfortably above the horizontal axis line at chartHeight (110px)
+      const bottomBaseline = chartHeight - 5; // 105px
+      const availablePlotHeight = bottomBaseline - topPadding; // 105 - 16 = 89px
+
+      function getLatencyY(val) {
+        const num = Number(val || 0);
+        if (isNaN(num) || num <= 0 || maxLatency <= 0) {
+          return bottomBaseline;
+        }
+        // Normalize ratio strictly between 0 and 1
+        const ratio = Math.min(1.0, Math.max(0.0, num / maxLatency));
+        const y = bottomBaseline - (ratio * availablePlotHeight);
+        // Absolute vertical clamp to guarantee no point ever renders outside [topPadding, bottomBaseline]
+        return Math.min(bottomBaseline, Math.max(topPadding, y));
+      }
+
+      const p95Points = [];
+      const avgPoints = [];
+
+      buckets.forEach((b, i) => {
+        const cx = Math.min(chartWidth - 4, Math.max(4, i * slotWidth + slotWidth / 2));
+        const p95Val = Number(b.p95_duration_ms ?? b.p95_latency_ms ?? 0);
+        const avgVal = Number(b.avg_duration_ms ?? b.avg_latency_ms ?? 0);
+        const cyP95 = getLatencyY(p95Val);
+        const cyAvg = getLatencyY(avgVal);
+        p95Points.push({ x: cx, y: cyP95, p95: p95Val, label: b.label });
+        avgPoints.push({ x: cx, y: cyAvg, avg: avgVal, label: b.label });
+      });
+
+      const p95PathD = p95Points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+      const avgPathD = avgPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+
+      let latencyCirclesSvg = '';
+      p95Points.forEach(p => {
+        latencyCirclesSvg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="#7c3aed" class="cursor-pointer"><title>${p.label}: P95 ${p.p95.toFixed(1)}ms</title></circle>`;
+      });
+      avgPoints.forEach(p => {
+        latencyCirclesSvg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2" fill="#818cf8" class="cursor-pointer"><title>${p.label}: Avg ${p.avg.toFixed(1)}ms</title></circle>`;
+      });
+
+      if (latContainer) {
+        latContainer.innerHTML = `
+          <svg viewBox="0 0 ${chartWidth} ${chartHeight + 18}" class="w-full h-full overflow-hidden">
+            <line x1="0" y1="${chartHeight}" x2="${chartWidth}" y2="${chartHeight}" stroke="#e2e8f0" stroke-width="1"/>
+            <path d="${avgPathD}" fill="none" stroke="#818cf8" stroke-width="1.5" stroke-dasharray="3,3"/>
+            <path d="${p95PathD}" fill="none" stroke="#7c3aed" stroke-width="2"/>
+            ${latencyCirclesSvg}
+            <text x="2" y="${chartHeight + 13}" font-size="9" fill="#94a3b8">${firstLabel}</text>
+            <text x="${chartWidth / 2}" y="${chartHeight + 13}" text-anchor="middle" font-size="9" fill="#94a3b8">${midLabel}</text>
+            <text x="${chartWidth - 2}" y="${chartHeight + 13}" text-anchor="end" font-size="9" fill="#94a3b8">${lastLabel}</text>
+          </svg>
+        `;
+      }
+
+      // 3. Chart 3: Cost Bar Chart
+      const maxBucketCost = Math.max(0.0001, ...buckets.map(b => b.total_cost || 0));
+      let costBarsSvg = '';
+      buckets.forEach((b, i) => {
+        const x = i * slotWidth;
+        const h = ((b.total_cost || 0) / maxBucketCost) * (chartHeight - 20);
+        const y = chartHeight - h;
+
+        if (b.total_cost > 0) {
+          costBarsSvg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${h.toFixed(1)}" fill="#10b981" rx="1.5"><title>${b.label}: $${b.total_cost.toFixed(5)}</title></rect>`;
+        } else {
+          costBarsSvg += `<circle cx="${(x + barWidth / 2).toFixed(1)}" cy="${(chartHeight - 2).toFixed(1)}" r="1" fill="#cbd5e1"/>`;
+        }
+      });
+
+      if (costContainer) {
+        costContainer.innerHTML = `
+          <svg viewBox="0 0 ${chartWidth} ${chartHeight + 16}" class="w-full h-full overflow-visible">
+            <line x1="0" y1="${chartHeight}" x2="${chartWidth}" y2="${chartHeight}" stroke="#e2e8f0" stroke-width="1"/>
+            ${costBarsSvg}
+            <text x="2" y="${chartHeight + 13}" font-size="9" fill="#94a3b8">${firstLabel}</text>
+            <text x="${chartWidth / 2}" y="${chartHeight + 13}" text-anchor="middle" font-size="9" fill="#94a3b8">${midLabel}</text>
+            <text x="${chartWidth - 2}" y="${chartHeight + 13}" text-anchor="end" font-size="9" fill="#94a3b8">${lastLabel}</text>
+          </svg>
+        `;
+      }
+    }
+
+    // --- Aggregate Node Performance Analytics (Classes 4 & 5 Watch) ---
+    let currentNodeWindow = '24h';
+
+    function openNodeAnalyticsModal() {
+      const modal = document.getElementById('nodeAnalyticsModal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      fetchNodeAnalytics();
+    }
+
+    function closeNodeAnalyticsModal() {
+      const modal = document.getElementById('nodeAnalyticsModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function changeNodeAnalyticsWindow(win) {
+      currentNodeWindow = win;
+      ['1h', '6h', '24h', '7d', '30d'].forEach(w => {
+        const b = document.getElementById(`nodeWin${w}`);
+        if (!b) return;
+        if (w === win) {
+          b.className = "px-2.5 py-1 rounded font-bold bg-purple-600 text-white shadow-xs";
+        } else {
+          b.className = "px-2.5 py-1 rounded font-medium text-slate-600 dark:text-purple-300 hover:text-purple-900";
+        }
+      });
+      fetchNodeAnalytics();
+    }
+
+    async function fetchNodeAnalytics() {
+      const tbody = document.getElementById('nodeAnalyticsTableBody');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-400 dark:text-purple-400">Loading node metrics...</td></tr>';
+
+      try {
+        const envEl = document.getElementById('envFilter');
+        const projEl = document.getElementById('projectFilter');
+        const env = envEl ? envEl.value : '';
+        const proj = projEl ? projEl.value.trim() : '';
+
+        const params = new URLSearchParams();
+        params.set('time_window', currentNodeWindow);
+        if (env) params.set('environment', env);
+        if (proj) params.set('project', proj);
+
+        const res = await apiFetch(`${BASE_PATH}/api/analytics/nodes?${params.toString()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        renderNodeAnalyticsTable(data);
+      } catch (err) {
+        console.error("Failed fetching node analytics:", err);
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-rose-500">Failed to load node analytics.</td></tr>';
+      }
+    }
+
+    function renderNodeAnalyticsTable(data) {
+      const tbody = document.getElementById('nodeAnalyticsTableBody');
+      if (!tbody) return;
+
+      const totalTraces = data.total_traces || 0;
+      const nodes = data.nodes || [];
+
+      document.getElementById('nodeTotalTracesAnalyzed').innerText = `${totalTraces} trace${totalTraces === 1 ? '' : 's'} analyzed`;
+      document.getElementById('nodeDistinctCount').innerText = `${nodes.length} distinct node${nodes.length === 1 ? '' : 's'}`;
+
+      if (nodes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-400 dark:text-purple-400">No node executions found for this time window.</td></tr>';
+        return;
+      }
+
+      // Identify bottleneck (highest P95)
+      let maxP95 = -1;
+      let bottleneckNode = null;
+      nodes.forEach(n => {
+        if (n.p95_duration_ms > maxP95) {
+          maxP95 = n.p95_duration_ms;
+          bottleneckNode = n.node_name;
+        }
+      });
+
+      tbody.innerHTML = nodes.map(n => {
+        const isBottleneck = n.node_name === bottleneckNode && n.p95_duration_ms > 0;
+        const bottleneckBadge = isBottleneck
+          ? '<span class="ml-1.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-950 dark:text-rose-300">🔥 Bottleneck</span>'
+          : '';
+
+        const errorBadge = n.error_count > 0
+          ? `<span class="px-1.5 py-0.5 rounded font-bold bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950 dark:text-rose-300">${n.error_rate.toFixed(1)}% (${n.error_count})</span>`
+          : '<span class="text-slate-400 dark:text-slate-500 font-mono">0.0%</span>';
+
+        return `
+          <tr class="hover:bg-purple-50/50 dark:hover:bg-purple-950/30 transition">
+            <td class="py-2.5 px-3 font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+              <span class="text-purple-600 dark:text-purple-400">🔹</span>
+              <span>${n.node_name}</span>
+              ${bottleneckBadge}
+            </td>
+            <td class="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-purple-200">${n.executions}</td>
+            <td class="py-2.5 px-3 text-right">
+              <div class="flex items-center justify-end space-x-1.5">
+                <div class="w-14 bg-purple-100 dark:bg-purple-900/60 rounded-full h-1.5 overflow-hidden">
+                  <div class="bg-purple-600 dark:bg-purple-400 h-full rounded-full" style="width: ${Math.min(100, Math.max(0, n.frequency_pct))}%"></div>
+                </div>
+                <span class="font-mono font-medium text-slate-800 dark:text-purple-100 text-[11px]">${n.frequency_pct.toFixed(1)}%</span>
+              </div>
+            </td>
+            <td class="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-purple-200">${n.avg_duration_ms.toFixed(1)}ms</td>
+            <td class="py-2.5 px-3 text-right font-mono font-bold ${isBottleneck ? 'text-rose-600 dark:text-rose-400' : 'text-purple-700 dark:text-purple-300'}">${n.p95_duration_ms.toFixed(1)}ms</td>
+            <td class="py-2.5 px-3 text-right font-mono text-slate-500 dark:text-purple-400 text-[11px]">${n.min_duration_ms.toFixed(0)} / ${n.max_duration_ms.toFixed(0)}ms</td>
+            <td class="py-2.5 px-3 text-right font-mono text-[11px]">${errorBadge}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Keyboard Shortcuts: '/' or 'Ctrl+K' for search, 'Esc' to close drawers/modals, 'j'/'k' or 'ArrowDown'/'ArrowUp' for trace navigation
+    window.addEventListener('keydown', (e) => {
+      const tag = (document.activeElement && document.activeElement.tagName) || '';
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      const modalEl = document.getElementById('apiKeyModal');
+      const isModalOpen = modalEl && !modalEl.classList.contains('hidden');
+      const compModalEl = document.getElementById('comparisonModal');
+      const isCompOpen = compModalEl && !compModalEl.classList.contains('hidden');
+      const nodeModalEl = document.getElementById('nodeAnalyticsModal');
+      const isNodeOpen = nodeModalEl && !nodeModalEl.classList.contains('hidden');
+
+      if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && !isInput && !isModalOpen && !isCompOpen && !isNodeOpen) {
+        e.preventDefault();
+        const searchInput = document.getElementById('searchInput');
+        searchInput.focus();
+        searchInput.select();
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        if (isNodeOpen) {
+          closeNodeAnalyticsModal();
+        } else if (isCompOpen) {
+          closeComparisonModal();
+        } else if (isModalOpen) {
+          closeApiKeyModal();
+        } else {
+          closeDagDrawer();
+        }
+        return;
+      }
+
+      // 'j' / 'ArrowDown' -> next trace; 'k' / 'ArrowUp' -> previous trace
+      if (!isInput && !isModalOpen && !isCompOpen && currentTraces.length > 0) {
+        if (e.key === 'j' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          const currIdx = currentTraces.findIndex(t => t.id === selectedTraceId);
+          const nextIdx = (currIdx >= 0 && currIdx < currentTraces.length - 1) ? currIdx + 1 : 0;
+          const nextTrace = currentTraces[nextIdx];
+          if (nextTrace) {
+            selectTrace(nextTrace.id);
+            document.getElementById(`trace-item-${nextTrace.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        } else if (e.key === 'k' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const currIdx = currentTraces.findIndex(t => t.id === selectedTraceId);
+          const prevIdx = currIdx > 0 ? currIdx - 1 : currentTraces.length - 1;
+          const prevTrace = currentTraces[prevIdx];
+          if (prevTrace) {
+            selectTrace(prevTrace.id);
+            document.getElementById(`trace-item-${prevTrace.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        }
+      }
+    });
+
+    // Initialize on load
+    window.addEventListener('DOMContentLoaded', () => {
+      initTheme();
+      updateApiKeyUI();
+      fetchDashboard(1);
+      toggleAutoRefresh(); // Start auto-refresh by default
+      setInterval(updateRelativeTimestamps, 30000); // 30s auto-updating relative timestamps without network calls
+    });
+  </script>
+  <!-- In-Page API Key Authentication Modal -->
+  <div id="apiKeyModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+    <div class="glass-card rounded-2xl p-6 max-w-md w-full shadow-2xl border border-purple-200 dark:border-purple-800 space-y-4">
+      <div class="flex items-center justify-between border-b border-purple-100 dark:border-purple-900/60 pb-3">
+        <div class="flex items-center space-x-2">
+          <div class="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/80 text-purple-600 dark:text-purple-300 flex items-center justify-center font-bold">
+            🔑
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white">API Key Authentication</h3>
+            <p class="text-[11px] text-slate-500 dark:text-purple-400">Manage ingestion & dashboard authorization</p>
+          </div>
+        </div>
+        <button onclick="closeApiKeyModal()" class="text-slate-400 hover:text-slate-700 dark:hover:text-white text-xs p-1 rounded-lg">✕</button>
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-xs font-semibold text-slate-700 dark:text-purple-200">
+          Secret Ingestion Key
+        </label>
+        <div class="relative">
+          <input
+            id="apiKeyInput"
+            type="password"
+            placeholder="Enter OBSERVE_API_KEY..."
+            onkeydown="if(event.key==='Enter') saveApiKeyFromModal()"
+            class="w-full bg-purple-50/50 dark:bg-purple-950/60 text-xs text-slate-800 dark:text-slate-100 px-3 py-2.5 pr-10 rounded-xl border border-purple-200 dark:border-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-400/30 font-mono"
+          />
+          <button
+            type="button"
+            id="toggleKeyVisibilityBtn"
+            onclick="toggleApiKeyVisibility()"
+            title="Toggle visibility"
+            class="absolute right-2.5 top-2.5 text-slate-400 hover:text-purple-600 dark:hover:text-purple-300 text-xs"
+          >
+            👁
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-400 dark:text-purple-400">
+          Stored securely in browser local storage and sent via <code class="font-mono text-purple-600 dark:text-purple-300">X-API-Key</code>.
+        </p>
+      </div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-purple-100 dark:border-purple-900/60 text-xs">
+        <button onclick="clearApiKeyFromModal()" class="px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/50 font-medium transition shadow-xs">
+          Clear Key
+        </button>
+        <div class="flex items-center space-x-2">
+          <button onclick="closeApiKeyModal()" class="px-3 py-1.5 rounded-xl text-slate-600 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/40 font-medium transition">
+            Cancel
+          </button>
+          <button onclick="saveApiKeyFromModal()" class="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition shadow-xs">
+            Save Key
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trace Side-by-Side Comparison Modal -->
+  <div id="comparisonModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+    <div class="glass-card rounded-2xl p-6 max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-purple-200 dark:border-purple-800 space-y-4">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-purple-100 dark:border-purple-900/60 pb-3 shrink-0">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/80 text-purple-600 dark:text-purple-300 flex items-center justify-center font-bold text-sm">
+            ⚖️
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white">Trace Comparison</h3>
+            <p class="text-[11px] text-slate-500 dark:text-purple-400">Side-by-side diff of execution latency, cost, spans, and output payloads</p>
+          </div>
+        </div>
+        <button onclick="closeComparisonModal()" class="text-slate-400 hover:text-slate-700 dark:hover:text-white text-xs p-1.5 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/40 transition">✕</button>
+      </div>
+
+      <!-- Selectors for Trace A and Trace B -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 shrink-0 bg-purple-50/50 dark:bg-purple-950/40 p-3 rounded-xl border border-purple-100 dark:border-purple-900/40">
+        <div class="space-y-1">
+          <label class="text-[11px] font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-purple-600"></span> Trace A (Baseline)
+          </label>
+          <select id="compareSelectA" onchange="onCompareSelectChange()" class="w-full bg-white dark:bg-purple-900/60 text-xs text-slate-800 dark:text-slate-100 px-3 py-2 rounded-xl border border-purple-200 dark:border-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-400/30 font-medium">
+          </select>
+        </div>
+        <div class="space-y-1">
+          <label class="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-indigo-600"></span> Trace B (Candidate)
+          </label>
+          <select id="compareSelectB" onchange="onCompareSelectChange()" class="w-full bg-white dark:bg-purple-900/60 text-xs text-slate-800 dark:text-slate-100 px-3 py-2 rounded-xl border border-purple-200 dark:border-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-400/30 font-medium">
+          </select>
+        </div>
+      </div>
+
+      <!-- Scrollable Comparison Content Body -->
+      <div id="compareBody" class="flex-1 overflow-y-auto space-y-4 pr-1">
+        <!-- Rendered dynamically by renderComparison() -->
+      </div>
+
+      <!-- Footer -->
+      <div class="flex items-center justify-between pt-3 border-t border-purple-100 dark:border-purple-900/60 text-xs shrink-0">
+        <span class="text-[11px] text-slate-400 dark:text-purple-400">Tip: Select two traces from the dropdowns above to compare performance deltas and output changes.</span>
+        <button onclick="closeComparisonModal()" class="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition shadow-xs">
+          Done
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Node Performance & Path Analytics Modal -->
+  <div id="nodeAnalyticsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+    <div class="glass-card rounded-2xl p-6 max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-purple-200 dark:border-purple-800 space-y-4">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-purple-100 dark:border-purple-900/60 pb-3 shrink-0">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/80 text-purple-600 dark:text-purple-300 flex items-center justify-center font-bold text-sm">
+            🧩
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              Aggregate Node Performance & Graph Path Analytics
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-normal">Class 4 & 5 Watch</span>
+            </h3>
+            <p class="text-[11px] text-slate-500 dark:text-purple-400">Cross-trace analysis of LangGraph node execution frequencies, P95 tail latency, bottlenecks, and failure rates</p>
+          </div>
+        </div>
+        <button onclick="closeNodeAnalyticsModal()" class="text-slate-400 hover:text-slate-700 dark:hover:text-white text-xs p-1.5 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/40 transition">✕</button>
+      </div>
+
+      <!-- Controls & Summary KPIs -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 bg-purple-50/50 dark:bg-purple-950/40 p-3 rounded-xl border border-purple-100 dark:border-purple-900/40 text-xs">
+        <div class="flex items-center space-x-2">
+          <span class="text-slate-500 dark:text-purple-400 font-semibold">Window:</span>
+          <div class="flex items-center space-x-1 bg-white dark:bg-purple-900/50 p-1 rounded-lg border border-purple-200 dark:border-purple-800 text-[11px]">
+            <button onclick="changeNodeAnalyticsWindow('1h')" id="nodeWin1h" class="px-2.5 py-1 rounded font-medium text-slate-600 dark:text-purple-300">1h</button>
+            <button onclick="changeNodeAnalyticsWindow('6h')" id="nodeWin6h" class="px-2.5 py-1 rounded font-medium text-slate-600 dark:text-purple-300">6h</button>
+            <button onclick="changeNodeAnalyticsWindow('24h')" id="nodeWin24h" class="px-2.5 py-1 rounded font-bold bg-purple-600 text-white shadow-xs">24h</button>
+            <button onclick="changeNodeAnalyticsWindow('7d')" id="nodeWin7d" class="px-2.5 py-1 rounded font-medium text-slate-600 dark:text-purple-300">7d</button>
+            <button onclick="changeNodeAnalyticsWindow('30d')" id="nodeWin30d" class="px-2.5 py-1 rounded font-medium text-slate-600 dark:text-purple-300">30d</button>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-3 text-[11px]">
+          <span id="nodeTotalTracesAnalyzed" class="font-medium text-purple-800 dark:text-purple-300">0 traces analyzed</span>
+          <span class="text-slate-300 dark:text-purple-800">|</span>
+          <span id="nodeDistinctCount" class="font-medium text-slate-600 dark:text-purple-400">0 distinct nodes</span>
+        </div>
+      </div>
+
+      <!-- Scrollable Table -->
+      <div class="flex-1 overflow-y-auto pr-1">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-purple-100 dark:border-purple-900 text-[11px] font-bold text-purple-900 dark:text-purple-200 bg-purple-50/40 dark:bg-purple-950/20">
+              <th class="py-2.5 px-3">Node Name</th>
+              <th class="py-2.5 px-3 text-right">Executions</th>
+              <th class="py-2.5 px-3 text-right" title="Percentage of analyzed traces that executed this node. Deviations indicate path routing shifts.">Frequency %</th>
+              <th class="py-2.5 px-3 text-right">Avg Latency</th>
+              <th class="py-2.5 px-3 text-right" title="P95 latency across executions. Identifies slowest tail bottlenecks.">P95 Latency</th>
+              <th class="py-2.5 px-3 text-right">Min / Max</th>
+              <th class="py-2.5 px-3 text-right">Error Rate</th>
+            </tr>
+          </thead>
+          <tbody id="nodeAnalyticsTableBody" class="divide-y divide-purple-100/60 dark:divide-purple-900/40">
+            <tr>
+              <td colspan="7" class="py-8 text-center text-slate-400 dark:text-purple-400">Loading node performance metrics...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Footer -->
+      <div class="flex items-center justify-between pt-3 border-t border-purple-100 dark:border-purple-900/60 text-xs shrink-0">
+        <span class="text-[11px] text-slate-400 dark:text-purple-400">💡 Tip: Nodes with low frequency % highlight conditional branch paths; high P95 indicates tail latency bottlenecks.</span>
+        <button onclick="closeNodeAnalyticsModal()" class="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition shadow-xs">
+          Done
+        </button>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>
