@@ -22,7 +22,7 @@ logger = logging.getLogger("langgraph_observe.server")
 
 
 
-DEFAULT_MAX_BODY_SIZE = 10 * 1024 * 1024  # 10 MB
+DEFAULT_MAX_BODY_SIZE = 50 * 1024 * 1024  # 50 MB
 DEFAULT_RATE_LIMIT_PER_MINUTE = 1200
 
 

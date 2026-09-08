@@ -73,3 +73,26 @@ def test_calculate_state_diff_appended_list():
     assert diff["messages"]["action"] == "appended"
     assert diff["messages"]["appended_count"] == 1
     assert diff["messages"]["items"] == ["how are you?"]
+
+
+def test_safe_serialize_large_payload_protection():
+    # Test list truncation at 100
+    big_list = list(range(250))
+    res_list = safe_serialize(big_list)
+    assert len(res_list) == 101
+    assert "<Truncated: 150 items omitted for trace efficiency>" in res_list[-1]
+
+    # Test string truncation at 10,000 chars
+    big_str = "x" * 20000
+    res_str = safe_serialize(big_str)
+    assert len(res_str) < 15000
+    assert "<Truncated: 10000 chars omitted>" in res_str
+
+    # Test SQLAlchemy Session protection
+    class Session:
+        def __init__(self):
+            self.identity_map = "internal"
+
+    sess = Session()
+    assert safe_serialize(sess) == "<Session>"
+

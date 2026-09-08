@@ -33,12 +33,21 @@ def _safe_serialize_core(obj: Any, max_depth: int = 8, _current_depth: int = 0) 
     if _current_depth >= max_depth:
         return f"<Truncated: max depth {max_depth} reached>"
 
-    if obj is None or isinstance(obj, (bool, int, float, str)):
+    if obj is None or isinstance(obj, (bool, int, float)):
         return obj
+
+    if isinstance(obj, str):
+        if len(obj) > 10000:
+            return obj[:10000] + f"... <Truncated: {len(obj) - 10000} chars omitted>"
+        return obj
+
+    # Guard against serializing SQLAlchemy Sessions, Engines, or internal structures
+    type_name = type(obj).__name__
+    if type_name in ("Session", "scoped_session", "AsyncSession", "Engine", "Connection", "IdentityMap"):
+        return f"<{type_name}>"
 
     if isinstance(obj, (datetime, date)):
         return obj.isoformat()
-
 
     if isinstance(obj, uuid.UUID):
         return str(obj)
@@ -93,9 +102,15 @@ def _safe_serialize_core(obj: Any, max_depth: int = 8, _current_depth: int = 0) 
             result[str(k)] = _safe_serialize_core(v, max_depth, _current_depth + 1)
         return result
 
-    # Lists, tuples, sets
+    # Lists, tuples, sets (cap at 100 items for trace efficiency)
     if isinstance(obj, (list, tuple, set)):
-        return [_safe_serialize_core(item, max_depth, _current_depth + 1) for item in obj]
+        items = list(obj)
+        MAX_ITEMS = 100
+        if len(items) > MAX_ITEMS:
+            serialized = [_safe_serialize_core(item, max_depth, _current_depth + 1) for item in items[:MAX_ITEMS]]
+            serialized.append(f"<Truncated: {len(items) - MAX_ITEMS} items omitted for trace efficiency>")
+            return serialized
+        return [_safe_serialize_core(item, max_depth, _current_depth + 1) for item in items]
 
     # Exceptions
     if isinstance(obj, BaseException):
@@ -109,7 +124,10 @@ def _safe_serialize_core(obj: Any, max_depth: int = 8, _current_depth: int = 0) 
         json.dumps(obj)
         return obj
     except (TypeError, OverflowError):
-        return str(obj)
+        s = str(obj)
+        if len(s) > 10000:
+            return s[:10000] + f"... <Truncated: {len(s) - 10000} chars omitted>"
+        return s
 
 
 def calculate_state_diff(
