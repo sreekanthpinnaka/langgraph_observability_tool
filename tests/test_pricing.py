@@ -13,10 +13,12 @@ from langgraph_observe.core.models import (
 )
 from langgraph_observe.core.pricing import (
     calculate_cost,
+    find_cached_input_pricing,
     find_pricing,
     load_pricing_from_dict,
     load_pricing_from_file,
     normalize_model_name,
+    register_cached_input_pricing,
     register_model_pricing,
 )
 from langgraph_observe.server.storage.memory import MemoryStorage
@@ -38,6 +40,44 @@ def test_find_pricing_standard_models():
     assert find_pricing("gpt-4o-mini") == (0.15, 0.60)
     assert find_pricing("gpt-4o-mini-2024-07-18") == (0.15, 0.60)
     assert find_pricing("openai/gpt-4o-2024-08-06") == (2.50, 10.00)
+    assert find_pricing("o1-2024-12-17") == (15.00, 60.00)
+    assert find_pricing("o3-mini-2025-01-31") == (1.10, 4.40)
+    assert find_pricing("gpt-4o-realtime-preview") == (5.00, 20.00)
+    assert find_pricing("text-embedding-3-small") == (0.02, 0.00)
+    assert find_pricing("text-embedding-3-large") == (0.13, 0.00)
+
+    # OpenAI Next-Gen & Requested Models
+    assert find_pricing("gpt-6-astra") == (10.00, 50.00)
+    assert find_pricing("gpt-5.6-sol") == (4.00, 20.00)
+    assert find_pricing("gpt-5.6") == (4.00, 20.00)
+    assert find_pricing("gpt-5.6-terra") == (2.00, 12.00)
+    assert find_pricing("gpt-5.6-luna") == (0.20, 1.20)
+    assert find_pricing("gpt-5.5") == (5.00, 30.00)
+    assert find_pricing("gpt-5.5-pro") == (30.00, 180.00)
+    assert find_pricing("gpt-5.4") == (2.50, 15.00)
+    assert find_pricing("gpt-5.2") == (1.75, 14.00)
+    assert find_pricing("gpt-5-mini") == (0.25, 2.00)
+    assert find_pricing("gpt-5-nano") == (0.05, 0.40)
+    assert find_pricing("gpt-4.1") == (2.00, 8.00)
+    assert find_pricing("gpt-4.1-mini") == (0.40, 1.60)
+    assert find_pricing("o3") == (1.00, 4.00)
+    assert find_pricing("o4-mini") == (1.10, 4.40)
+
+    # Cached Input Pricing
+    assert find_cached_input_pricing("gpt-6-astra") == 1.00
+    assert find_cached_input_pricing("gpt-5.6-sol") == 0.40
+    assert find_cached_input_pricing("gpt-5.6-terra") == 0.20
+    assert find_cached_input_pricing("gpt-5.6-luna") == 0.02
+    assert find_cached_input_pricing("gpt-5.5") == 0.50
+    assert find_cached_input_pricing("gpt-5.4") == 0.25
+    assert find_cached_input_pricing("gpt-5.2") == 0.175
+    assert find_cached_input_pricing("gpt-5-mini") == 0.025
+    assert find_cached_input_pricing("gpt-5-nano") == 0.005
+    assert find_cached_input_pricing("gpt-4.1") == 0.50
+    assert find_cached_input_pricing("gpt-4.1-mini") == 0.10
+    assert find_cached_input_pricing("gpt-4o") == 1.25
+    assert find_cached_input_pricing("o3") == 0.25
+    assert find_cached_input_pricing("o4-mini") == 0.275
 
     # Anthropic
     assert find_pricing("claude-3-5-sonnet-20241022") == (3.00, 15.00)
@@ -65,6 +105,25 @@ def test_calculate_cost_exact():
     assert res["prompt_cost"] == 0.0025
     assert res["completion_cost"] == 0.005
     assert res["total_cost"] == 0.0075
+    assert res["is_estimated"] is True
+
+
+def test_calculate_cost_with_cached_tokens():
+    # gpt-6-astra: prompt=$10.00/1M, cached=$1.00/1M, completion=$50.00/1M
+    # 10,000 prompt tokens (8,000 cached, 2,000 uncached), 1,000 completion tokens
+    # uncached prompt: (2,000 / 1e6) * 10.00 = 0.02
+    # cached prompt:   (8,000 / 1e6) * 1.00  = 0.008
+    # total prompt:    0.028
+    # completion:      (1,000 / 1e6) * 50.00 = 0.05
+    # total cost:      0.078
+    res = calculate_cost("gpt-6-astra", prompt_tokens=10000, completion_tokens=1000, cached_tokens=8000)
+    assert res["model"] == "gpt-6-astra"
+    assert res["prompt_tokens"] == 10000
+    assert res["completion_tokens"] == 1000
+    assert res["cached_tokens"] == 8000
+    assert res["prompt_cost"] == 0.028
+    assert res["completion_cost"] == 0.05
+    assert res["total_cost"] == 0.078
     assert res["is_estimated"] is True
 
 
@@ -222,4 +281,42 @@ def test_dynamic_pricing_and_custom_loaders(caplog):
         assert cost_info["total_cost"] == 0.0
         assert cost_info["is_estimated"] is False
         assert any("Unknown model 'some-totally-unknown-model-xyz'" in record.message for record in caplog.records)
+
+
+def test_all_25_exact_models_present():
+    """Verify all 25 exact API / LangChain model IDs from user specification."""
+    models_to_test = [
+        "gpt-6-astra",
+        "gpt-5.6-sol",
+        "gpt-5.6",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
+        "gpt-5.5",
+        "gpt-5.5-pro",
+        "gpt-5.4",
+        "gpt-5.4-pro",
+        "gpt-5.4-mini",
+        "gpt-5.4-nano",
+        "gpt-5.3-codex",
+        "gpt-5.2",
+        "gpt-5.2-pro",
+        "gpt-5.1",
+        "gpt-5",
+        "gpt-5-mini",
+        "gpt-5-nano",
+        "gpt-5-pro",
+        "o3-pro",
+        "o3",
+        "gpt-4.1",
+        "gpt-4.1-mini",
+        "gpt-4o",
+        "gpt-4o-mini",
+    ]
+    for model_id in models_to_test:
+        pricing = find_pricing(model_id)
+        assert pricing is not None, f"Model ID '{model_id}' was not found in pricing"
+        assert len(pricing) == 2, f"Model ID '{model_id}' pricing tuple must have length 2"
+        assert pricing[0] > 0, f"Model ID '{model_id}' prompt price must be > 0"
+        assert pricing[1] > 0, f"Model ID '{model_id}' completion price must be > 0"
+
 

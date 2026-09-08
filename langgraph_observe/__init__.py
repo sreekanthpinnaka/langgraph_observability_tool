@@ -39,7 +39,9 @@ from langgraph_observe.core.masking import (
 )
 from langgraph_observe.core.pricing import (
     calculate_cost,
+    find_cached_input_pricing,
     find_pricing,
+    register_cached_input_pricing,
     register_model_pricing,
 )
 from langgraph_observe.server import (
@@ -80,6 +82,7 @@ __all__ = [
     "calculate_cost",
     "create_server_app",
     "create_storage_from_url",
+    "find_cached_input_pricing",
     "find_pricing",
     "get_default_masker",
     "get_default_storage",
@@ -88,6 +91,7 @@ __all__ = [
     "mount_observability",
     "mask_pii",
     "record_eval",
+    "register_cached_input_pricing",
     "register_model_pricing",
     "set_default_storage",
     "set_trace_metadata",

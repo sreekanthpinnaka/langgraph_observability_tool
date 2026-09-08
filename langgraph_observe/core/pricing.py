@@ -12,24 +12,69 @@ logger = logging.getLogger("langgraph_observe.pricing")
 
 # Standard Pricing in USD per 1,000,000 tokens (Prompt / Completion)
 DEFAULT_MODEL_PRICING: Dict[str, Tuple[float, float]] = {
-    # OpenAI Models
+    # OpenAI Next-Gen & Current Models
+    "gpt-6-astra": (10.00, 50.00),
+    "gpt-6": (10.00, 50.00),
+    "gpt-5.6-sol": (4.00, 20.00),
+    "gpt-5.6": (4.00, 20.00),
+    "gpt-5.6-terra": (2.00, 12.00),
+    "gpt-5.6-luna": (0.20, 1.20),
+    "gpt-5.5-pro": (30.00, 180.00),
+    "gpt-5.5": (5.00, 30.00),
+    "gpt-5.4-pro": (15.00, 90.00),
+    "gpt-5.4": (2.50, 15.00),
+    "gpt-5.4-mini": (0.25, 2.00),
+    "gpt-5.4-nano": (0.05, 0.40),
+    "gpt-5.3-codex": (2.00, 12.00),
+    "gpt-5.2-pro": (10.50, 84.00),
+    "gpt-5.2": (1.75, 14.00),
+    "gpt-5.1": (1.50, 12.00),
+    "gpt-5-pro": (30.00, 180.00),
+    "gpt-5-mini": (0.25, 2.00),
+    "gpt-5-nano": (0.05, 0.40),
+    "gpt-5": (5.00, 30.00),
+    "o3-pro": (10.00, 40.00),
+    "o3": (1.00, 4.00),
+    "o4-mini": (1.10, 4.40),
+    "gpt-4.1-mini": (0.40, 1.60),
+    "gpt-4.1": (2.00, 8.00),
+    # OpenAI Standard & Realtime Models
     "gpt-4o": (2.50, 10.00),
+    "gpt-4o-2024-11-20": (2.50, 10.00),
     "gpt-4o-2024-08-06": (2.50, 10.00),
     "gpt-4o-2024-05-13": (5.00, 15.00),
     "chatgpt-4o-latest": (5.00, 15.00),
+    "gpt-4o-realtime-preview": (5.00, 20.00),
+    "gpt-4o-realtime-preview-2024-12-17": (5.00, 20.00),
+    "gpt-4o-realtime-preview-2024-10-01": (5.00, 20.00),
     "gpt-4o-mini": (0.15, 0.60),
     "gpt-4o-mini-2024-07-18": (0.15, 0.60),
+    "gpt-4o-mini-realtime-preview": (0.60, 2.40),
+    "gpt-4o-mini-realtime-preview-2024-12-17": (0.60, 2.40),
     "gpt-4.5": (75.00, 150.00),
     "gpt-4.5-preview": (75.00, 150.00),
+    "gpt-4.5-preview-2025-02-27": (75.00, 150.00),
     "o1": (15.00, 60.00),
+    "o1-2024-12-17": (15.00, 60.00),
     "o1-preview": (15.00, 60.00),
     "o1-mini": (3.00, 12.00),
+    "o1-mini-2024-09-12": (3.00, 12.00),
     "o3-mini": (1.10, 4.40),
-    "o4-mini": (1.10, 4.40),
+    "o3-mini-2025-01-31": (1.10, 4.40),
     "gpt-4-turbo": (10.00, 30.00),
+    "gpt-4-turbo-2024-04-09": (10.00, 30.00),
     "gpt-4-turbo-preview": (10.00, 30.00),
+    "gpt-4-0125-preview": (10.00, 30.00),
+    "gpt-4-1106-preview": (10.00, 30.00),
     "gpt-4": (30.00, 60.00),
     "gpt-3.5-turbo": (0.50, 1.50),
+    "gpt-3.5-turbo-0125": (0.50, 1.50),
+    "gpt-3.5-turbo-instruct": (1.50, 2.00),
+    "text-embedding-3-small": (0.02, 0.00),
+    "text-embedding-3-large": (0.13, 0.00),
+    "text-embedding-ada-002": (0.10, 0.00),
+    "babbage-002": (0.40, 0.40),
+    "davinci-002": (2.00, 2.00),
     # Anthropic Models
     "claude-3-7-sonnet": (3.00, 15.00),
     "claude-3-7-sonnet-20250219": (3.00, 15.00),
@@ -69,6 +114,64 @@ DEFAULT_MODEL_PRICING: Dict[str, Tuple[float, float]] = {
 # User-registered custom overrides
 CUSTOM_MODEL_PRICING: Dict[str, Tuple[float, float]] = {}
 _WARNED_UNKNOWN_MODELS: Set[str] = set()
+
+# Standard Cached Input Pricing in USD per 1,000,000 tokens
+DEFAULT_CACHED_INPUT_PRICING: Dict[str, float] = {
+    "gpt-6-astra": 1.00,
+    "gpt-6": 1.00,
+    "gpt-5.6-sol": 0.40,
+    "gpt-5.6": 0.40,
+    "gpt-5.6-terra": 0.20,
+    "gpt-5.6-luna": 0.02,
+    "gpt-5.5-pro": 3.00,
+    "gpt-5.5": 0.50,
+    "gpt-5.4-pro": 1.50,
+    "gpt-5.4": 0.25,
+    "gpt-5.4-mini": 0.025,
+    "gpt-5.4-nano": 0.005,
+    "gpt-5.3-codex": 0.20,
+    "gpt-5.2-pro": 1.05,
+    "gpt-5.2": 0.175,
+    "gpt-5.1": 0.15,
+    "gpt-5-pro": 3.00,
+    "gpt-5-mini": 0.025,
+    "gpt-5-nano": 0.005,
+    "gpt-5": 0.50,
+    "o3-pro": 2.50,
+    "o3": 0.25,
+    "o4-mini": 0.275,
+    "gpt-4.1-mini": 0.10,
+    "gpt-4.1": 0.50,
+    "gpt-4o": 1.25,
+}
+
+CUSTOM_CACHED_INPUT_PRICING: Dict[str, float] = {}
+
+
+def register_cached_input_pricing(model_name: str, cached_per_million: float) -> None:
+    """Register or override cached input pricing for a specific model (USD per 1M tokens)."""
+    norm = normalize_model_name(model_name)
+    CUSTOM_CACHED_INPUT_PRICING[norm] = float(cached_per_million)
+
+
+def find_cached_input_pricing(model_name: Optional[str]) -> Optional[float]:
+    """Look up cached input pricing per 1M tokens for a given model name."""
+    norm = normalize_model_name(model_name)
+    if norm == "unknown":
+        return None
+
+    if norm in CUSTOM_CACHED_INPUT_PRICING:
+        return CUSTOM_CACHED_INPUT_PRICING[norm]
+
+    if norm in DEFAULT_CACHED_INPUT_PRICING:
+        return DEFAULT_CACHED_INPUT_PRICING[norm]
+
+    sorted_keys = sorted(DEFAULT_CACHED_INPUT_PRICING.keys(), key=lambda k: len(k), reverse=True)
+    for key in sorted_keys:
+        if norm.startswith(key):
+            return DEFAULT_CACHED_INPUT_PRICING[key]
+
+    return None
 
 
 def register_model_pricing(
@@ -126,20 +229,74 @@ def find_pricing(model_name: Optional[str]) -> Optional[Tuple[float, float]]:
             return DEFAULT_MODEL_PRICING[key]
 
     # 5. Generic family fallback matching
+    if "gpt-6" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-6-astra"]
+    if "gpt-5.6-terra" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5.6-terra"]
+    if "gpt-5.6-luna" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5.6-luna"]
+    if "gpt-5.6-sol" in norm or "gpt-5.6" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5.6"]
+    if "gpt-5.5-pro" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5.5-pro"]
+    if "gpt-5.5" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5.5"]
+    if "gpt-5.4-pro" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5.4-pro"]
+    if "gpt-5.4-mini" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5.4-mini"]
+    if "gpt-5.4-nano" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5.4-nano"]
+    if "gpt-5.4" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5.4"]
+    if "gpt-5.3-codex" in norm or "gpt-5.3" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5.3-codex"]
+    if "gpt-5.2-pro" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5.2-pro"]
+    if "gpt-5.2" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5.2"]
+    if "gpt-5.1" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5.1"]
+    if "gpt-5-pro" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5-pro"]
+    if "gpt-5-nano" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5-nano"]
+    if "gpt-5-mini" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5-mini"]
+    if "gpt-5" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-5"]
     if "gpt-4.5" in norm:
         return DEFAULT_MODEL_PRICING["gpt-4.5"]
+    if "gpt-4.1-mini" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-4.1-mini"]
+    if "gpt-4.1" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-4.1"]
+    if "gpt-4o-mini-realtime" in norm or ("realtime" in norm and "mini" in norm):
+        return DEFAULT_MODEL_PRICING["gpt-4o-mini-realtime-preview"]
+    if "gpt-4o-realtime" in norm or "realtime" in norm:
+        return DEFAULT_MODEL_PRICING["gpt-4o-realtime-preview"]
     if "gpt-4o-mini" in norm:
         return DEFAULT_MODEL_PRICING["gpt-4o-mini"]
     if "gpt-4o" in norm:
         return DEFAULT_MODEL_PRICING["gpt-4o"]
     if "o4-mini" in norm:
         return DEFAULT_MODEL_PRICING["o4-mini"]
+    if "o3-pro" in norm:
+        return DEFAULT_MODEL_PRICING["o3-pro"]
     if "o3-mini" in norm:
         return DEFAULT_MODEL_PRICING["o3-mini"]
+    if "o3" in norm:
+        return DEFAULT_MODEL_PRICING["o3"]
     if "o1-mini" in norm:
         return DEFAULT_MODEL_PRICING["o1-mini"]
     if "o1" in norm:
         return DEFAULT_MODEL_PRICING["o1"]
+    if "text-embedding-3-small" in norm:
+        return DEFAULT_MODEL_PRICING["text-embedding-3-small"]
+    if "text-embedding-3-large" in norm:
+        return DEFAULT_MODEL_PRICING["text-embedding-3-large"]
+    if "text-embedding-ada-002" in norm:
+        return DEFAULT_MODEL_PRICING["text-embedding-ada-002"]
     if "gpt-4" in norm:
         return DEFAULT_MODEL_PRICING["gpt-4-turbo"]
     if "gpt-3.5" in norm:
@@ -174,10 +331,12 @@ def calculate_cost(
     model_name: Optional[str],
     prompt_tokens: int = 0,
     completion_tokens: int = 0,
+    cached_tokens: int = 0,
 ) -> Dict[str, Any]:
     """Calculate the estimated USD cost for a given model and token counts."""
     p_tok = max(0, int(prompt_tokens or 0))
     c_tok = max(0, int(completion_tokens or 0))
+    cached_tok = max(0, int(cached_tokens or 0))
     total_tok = p_tok + c_tok
 
     norm_name = normalize_model_name(model_name)
@@ -185,7 +344,12 @@ def calculate_cost(
 
     if pricing is not None:
         p_rate, c_rate = pricing
-        p_cost = (p_tok / 1_000_000.0) * p_rate
+        cached_rate = find_cached_input_pricing(norm_name)
+        if cached_tok > 0 and cached_rate is not None:
+            uncached_p_tok = max(0, p_tok - cached_tok)
+            p_cost = (uncached_p_tok / 1_000_000.0) * p_rate + (cached_tok / 1_000_000.0) * cached_rate
+        else:
+            p_cost = (p_tok / 1_000_000.0) * p_rate
         c_cost = (c_tok / 1_000_000.0) * c_rate
         total_cost = p_cost + c_cost
         is_estimated = True
@@ -201,7 +365,7 @@ def calculate_cost(
                 f"Use register_model_pricing() or OBSERVE_PRICING_FILE to configure."
             )
 
-    return {
+    res: Dict[str, Any] = {
         "model": norm_name,
         "prompt_tokens": p_tok,
         "completion_tokens": c_tok,
@@ -212,6 +376,9 @@ def calculate_cost(
         "currency": "USD",
         "is_estimated": is_estimated,
     }
+    if cached_tok > 0:
+        res["cached_tokens"] = cached_tok
+    return res
 
 
 def load_pricing_from_dict(pricing_data: Dict[str, Any]) -> int:

@@ -183,13 +183,18 @@ class Trace(BaseModel):
                     s_cc = float(usage.get("completion_cost", 0.0))
                     s_tc = float(usage.get("total_cost", 0.0))
                 elif s_tot > 0:
-                    cost_info = calculate_cost(model, s_in, s_out)
+                    s_cached = usage.get("cached_tokens", 0)
+                    if not s_cached and isinstance(usage.get("prompt_tokens_details"), dict):
+                        s_cached = usage["prompt_tokens_details"].get("cached_tokens", 0)
+                    cost_info = calculate_cost(model, s_in, s_out, cached_tokens=s_cached)
                     s_pc = cost_info["prompt_cost"]
                     s_cc = cost_info["completion_cost"]
                     s_tc = cost_info["total_cost"]
                     usage["prompt_cost"] = s_pc
                     usage["completion_cost"] = s_cc
                     usage["total_cost"] = s_tc
+                    if s_cached:
+                        usage["cached_tokens"] = s_cached
                     usage["model"] = cost_info["model"]
                     span.metadata["usage"] = usage
                 else:
